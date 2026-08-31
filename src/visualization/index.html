@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CNCgAIde · parts</title>
+<link rel="stylesheet" href="web/style.css">
+<script>
+  document.documentElement.dataset.theme = localStorage.getItem('tempVisualTheme') || 'light';
+  // Provider before first paint too, so the accent never flashes the other line's colour.
+  document.documentElement.dataset.line = localStorage.getItem('gatherSeedLine') === 'nx' ? 'nx' : 'occ';
+</script>
+</head>
+<body class="launcher">
+
+<header class="topbar">
+  <a class="brand" href="index.html" title="Home"> <svg class="brand-home" viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 8.2 8 3.2l5.5 5v5.3h-3.6V9.9H6.1v3.6H2.5z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>CNCgAIde</a>
+  <div class="segmented compact line-seg" id="line-seg" data-active="0" style="--segments: 2" title="Kernel line">
+    <span class="seg-thumb" aria-hidden="true"></span>
+  </div>
+  <div class="spacer"></div>
+  <div class="segmented" id="view-tabs" data-active="0" style="--segments: 3">
+    <span class="seg-thumb" aria-hidden="true"></span>
+    <button type="button" data-view="parts" aria-selected="true">Parts</button>
+    <button type="button" data-view="heuristics" aria-selected="false">Heuristics</button>
+    <button type="button" data-view="similarity" aria-selected="false">Similarity</button>
+  </div>
+  <div class="spacer"></div>
+  <div class="toolbar">
+    <label id="add-parts-btn" class="btn-primary file-btn" title="Upload STEP files into the input directory and build them">
+      Add parts<input id="add-files" type="file" multiple accept=".step,.stp,.STEP,.STP" hidden>
+    </label>
+    <button id="refresh-btn" class="btn refresh-btn" data-state="idle" title="sync with the input directory: stale parts only">
+      <span class="refresh-dot"></span><span id="refresh-label">Refresh stale</span>
+    </button>
+    <button id="refresh-all-btn" class="btn" title="Reprocess every part">Refresh all</button>
+    <button id="theme-toggle" class="icon-btn" title="Light / dark"></button>
+  </div>
+</header>
+
+<div class="job-bar" id="job-bar" hidden></div>
+
+<div class="launcher-body" id="view-parts">
+
+  <div class="filter-bar">
+    <input id="search" type="search" placeholder="search part or feature type…" spellcheck="false">
+    <div class="filter-types" id="type-filter"></div>
+    <button id="reset-filters" class="btn-text" hidden>reset</button>
+  </div>
+
+  <div class="part-list" id="part-list">
+    <div class="part-row head" id="list-head">
+      <span class="col-name" data-sort="partId">Part</span>
+      <span class="col-status" data-sort="storeState">status</span>
+      <span class="col-meta" data-sort="producedAt">built</span>
+      <span class="col-num" data-sort="rawCadFaceCount">faces</span>
+      <span class="col-num" data-sort="featureNodeCount">features</span>
+      <span class="col-num" data-sort="relationEdgeCount">relations</span>
+      <span class="col-num" data-sort="unclaimedRawCadFaceCount">unclaimed</span>
+      <span class="col-types">feature types</span>
+      <span class="col-actions"></span>
+    </div>
+    <div id="rows"></div>
+  </div>
+
+  <div class="list-summary" id="list-summary" hidden></div>
+
+  <div class="empty-state" id="empty-state" hidden>no part matches the current filter</div>
+</div>
+
+<div class="stats-body" id="view-heuristics" hidden></div>
+
+<div class="stats-body" id="view-similarity" hidden></div>
+
+<footer class="page-foot" id="run-line" title="run id · part count">loading…</footer>
+
+<script type="module" src="web/launcher.js"></script>
+</body>
+</html>

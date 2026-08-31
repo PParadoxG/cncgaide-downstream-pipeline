@@ -1,0 +1,47 @@
+{
+  "_comment": "Recorded by verify_install.py --record. Regenerate rather than edit: these numbers are an observation, not a setting.",
+  "parts": {
+    "STEPtest2": {
+      "nx": {
+        "edges": 19,
+        "featureTypes": {
+          "CORNER_NOTCH_STRAIGHT": 1,
+          "POCKET_RECTANGULAR_STRAIGHT": 1,
+          "STEP1POCKET": 5,
+          "STEP2POCKET": 1,
+          "SURFACE_PLANAR_RECTANGULAR": 6
+        },
+        "heuristicRecords": 71,
+        "nodes": 14,
+        "outcomes": {
+          "FAIL": 1,
+          "NOT_APPLICABLE": 14,
+          "NOT_EVALUABLE": 16,
+          "PASS": 40
+        }
+      },
+      "occ": {
+        "edges": 34,
+        "featureTypes": {
+          "BlindHole": 4,
+          "Chamfer": 1,
+          "Counterbore": 1,
+          "Countersink": 1,
+          "Fillet": 2,
+          "PlanarFace": 6,
+          "RectangularPocket": 1,
+          "Step": 1
+        },
+        "heuristicRecords": 67,
+        "nodes": 17,
+        "outcomes": {
+          "FAIL": 6,
+          "NOT_APPLICABLE": 3,
+          "NOT_EVALUABLE": 20,
+          "PASS": 38
+        }
+      }
+    }
+  },
+  "tag": "latest"
+}

@@ -1,0 +1,1261 @@
+heuristics:
+- id: H01
+  status: domain_changed
+  label_en: H01 — Hole depth-to-diameter ratio
+  grade: advisory
+  scope_en: single feature
+  statement_en: Keep the depth-to-diameter ratio of a hole at or below 4.
+  expression_page: derived_ratio_depth_to_diameter <= 4
+  condition: derived_ratio_depth_to_diameter <= 4
+  threshold_value: 4
+  threshold_note_en: t_hole_ld = 4
+  external_dependency_en: null
+  applies_to:
+  - BlindHole
+  - Counterbore
+  - Countersink
+  - StepBore
+  - ThroughHole
+  uses_relations: []
+  affects_kpi:
+  - kpi_rest_material_indicator
+  - kpi_machining_time
+  - kpi_tool_wear_proxy
+  validation_status: candidate
+  source_reference: null
+  recommendation_text: null
+  validity_context_note: null
+  v31_condition: derived_ratio_depth_to_diameter <= 4
+  v31_applies_to:
+  - BlindHole
+- id: H02
+  status: rewritten
+  label_en: H02 — Standard drill-point blind-hole bottom
+  grade: informational
+  scope_en: single feature
+  statement_en: Use a standard 118-degree or 135-degree conical drill-point bottom for a blind hole.
+  expression_page: hole_bottom_type ∈ {conical_118, conical_135}
+  condition: hole_bottom_type in {conical_118, conical_135}
+  threshold_value: null
+  threshold_note_en: Controlled set, no numeric threshold
+  external_dependency_en: null
+  applies_to:
+  - BlindHole
+  uses_relations: []
+  affects_kpi:
+  - kpi_machining_time
+  validation_status: candidate
+  source_reference: null
+  recommendation_text: null
+  validity_context_note: null
+  v31_condition: bottom_shape_type in {'conical_118','conical_135'}
+  v31_applies_to:
+  - BlindHole
+- id: H03
+  status: rewritten
+  label_en: H03 — Pocket depth-to-width ratio
+  grade: advisory
+  scope_en: single feature
+  statement_en: Keep the depth of a rectangular pocket at or below five times its most restrictive width.
+  expression_page: derived_ratio_depth_to_min_width <= 5
+  condition: derived_ratio_depth_to_min_width <= 5
+  threshold_value: 5
+  threshold_note_en: t_pocket_ld = 5
+  external_dependency_en: null
+  applies_to:
+  - RectangularPocket
+  uses_relations: []
+  affects_kpi:
+  - kpi_tool_wear_proxy
+  - kpi_rest_material_indicator
+  - kpi_collision_indicator
+  validation_status: candidate
+  source_reference: null
+  recommendation_text: null
+  validity_context_note: null
+  v31_condition: derived_ratio_depth_to_width <= 5
+  v31_applies_to:
+  - Pocket
+- id: H04
+  status: retired
+  label_en: H04 — Open pocket preference
+  grade: —
+  scope_en: single feature
+  statement_en: Prefer an open pocket whose opening boundary reaches the exterior part boundary so that axial tool entry can
+    be avoided where feasible.
+  expression_page: —
+  condition: null
+  threshold_value: null
+  threshold_note_en: —
+  external_dependency_en: null
+  applies_to: []
+  uses_relations: []
+  affects_kpi:
+  - kpi_machining_time
+  validation_status: candidate
+  source_reference: null
+  recommendation_text: null
+  validity_context_note: null
+  v31_condition: is_open_state in {'open','half_open'}
+  v31_applies_to:
+  - Pocket
+  retired_reason_en: The open pocket is not in the class space this ontology froze. The Pocket family's criterion is a closed principal wall band, so the rule has no object inside the ontology it can decide.
+- id: H05
+  status: rewritten
+  label_en: H05 — Minimum fillet radius
+  grade: advisory
+  scope_en: single feature
+  statement_en: Use a fillet radius of at least 0.5 mm so that a standard edge-rounding tool can be used.
+  expression_page: fillet_radius >= 0.5
+  condition: fillet_radius >= 0.5
+  threshold_value: 0.5
+  threshold_note_en: t_fillet_radius = 0.5 mm
+  external_dependency_en: null
+  applies_to:
+  - Fillet
+  uses_relations: []
+  affects_kpi:
+  - kpi_tool_changes
+  validation_status: candidate
+  source_reference: null
+  recommendation_text: null
+  validity_context_note: null
+  v31_condition: cornerRadius >= 0.5
+  v31_applies_to:
+  - Fillet
+- id: H06
+  status: rewritten
+  label_en: H06 — Minimum circular-boss diameter
+  grade: advisory
+  scope_en: single feature
+  statement_en: Keep the smaller of the base and top diameters of a circular boss at or above 3 mm.
+  expression_page: min(base_diameter, top_diameter) >= 3.0
+  condition: min(base_diameter, top_diameter) >= 3.0
+  threshold_value: 3.0
+  threshold_note_en: t_boss_diameter = 3.0 mm
+  external_dependency_en: null
+  applies_to:
+  - CircularBoss
+  uses_relations: []
+  affects_kpi:
+  - kpi_workpiece_stiffness
+  validation_status: candidate
+  source_reference: null
+  recommendation_text: null
+  validity_context_note: null
+  v31_condition: diameter >= 3.0
+  v31_applies_to:
+  - Boss
+- id: H07
+  status: rewritten
+  label_en: H07 — Circular-boss height-to-diameter ratio
+  grade: advisory
+  scope_en: single feature
+  statement_en: Keep the height of a circular boss at or below four times the smaller of its base and top diameters.
+  expression_page: height <= 4 × min(base_diameter, top_diameter)
+  condition: height <= 4 * min(base_diameter, top_diameter)
+  threshold_value: 4
+  threshold_note_en: t_boss_hd = 4
+  external_dependency_en: null
+  applies_to:
+  - CircularBoss
+  uses_relations: []
+  affects_kpi:
+  - kpi_rest_material_indicator
+  - kpi_workpiece_stiffness
+  validation_status: candidate
+  source_reference: null
+  recommendation_text: null
+  validity_context_note: null
+  v31_condition: height <= 4 * diameter
+  v31_applies_to:
+  - Boss
+- id: H08
+  status: rewritten
+  label_en: H08 — Available drill diameter
+  grade: advisory
+  scope_en: single feature
+  statement_en: Choose a hole diameter for which a matching drill (within 0.05 mm) exists in the target machine's magazine.
+  expression_page: '∃ d ∈ EXT.drill_diameters : |diameter − d| <= 0.05'
+  condition: 'exists d in tool_magazine(machine).drill_diameters : |diameter - d| <= 0.05'
+  threshold_value: null
+  threshold_note_en: tol_diameter = 0.05 mm
+  external_dependency_en: tool magazine
+  applies_to:
+  - ThroughHole
+  - BlindHole
+  uses_relations: []
+  affects_kpi:
+  - kpi_tool_changes
+  - kpi_machining_time
+  validation_status: candidate
+  source_reference: null
+  recommendation_text: null
+  validity_context_note: null
+  v31_condition: diameter in tool_magazine(machine).drill_diameters
+  v31_applies_to:
+  - ThroughHole
+  - BlindHole
+- id: H09
+  status: rewritten
+  label_en: H09 — Uniform hole axis orientation
+  grade: advisory
+  scope_en: part-level aggregate
+  statement_en: 'Orient all holes of a part along one axis direction (distinct feature_axis directions within 0.5 degree:
+    at most 1).'
+  expression_page: distinct(feature_axis over Hole in part, 0.5°) <= 1
+  condition: distinct(feature_axis over Hole in part, 0.5 deg) <= 1
+  threshold_value: 1
+  threshold_note_en: t_hole_axis_variety = 1; tol_axis = 0.5°
+  external_dependency_en: null
+  applies_to:
+  - BlindHole
+  - Counterbore
+  - Countersink
+  - StepBore
+  - ThroughHole
+  uses_relations: []
+  affects_kpi:
+  - kpi_machining_time
+  validation_status: candidate
+  source_reference: null
+  recommendation_text: null
+  validity_context_note: null
+  v31_condition: hasDirection(A) == hasDirection(B) für A parallel_to B
+  v31_applies_to:
+  - BlindHole
+  - ThroughHole
+  - ThreadedHole
+- id: H10
+  status: rewritten
+  label_en: H10 — Minimum pocket corner radius
+  grade: hard
+  scope_en: single feature
+  statement_en: Use a minimum concave internal corner radius of at least 1 mm in a pocket.
+  expression_page: min_corner_radius >= 1.0
+  condition: min_corner_radius >= 1.0
+  threshold_value: 1.0
+  threshold_note_en: t_corner_radius = 1.0 mm
+  external_dependency_en: null
+  applies_to:
+  - RectangularPocket
+  - GeneralPocket
+  uses_relations: []
+  affects_kpi:
+  - kpi_tool_changes
+  validation_status: candidate
+  source_reference: null
+  recommendation_text: null
+  validity_context_note: null
+  v31_condition: cornerRadius >= 1.0
+  v31_applies_to:
+  - Pocket
+- id: H11
+  status: domain_changed
+  label_en: H11 — Minimum remaining pocket floor thickness
+  grade: hard
+  scope_en: single feature
+  statement_en: Keep the remaining floor thickness below a pocket at or above 2 mm.
+  expression_page: derived_floor_thickness >= 2.0
+  condition: derived_floor_thickness >= 2.0
+  threshold_value: 2.0
+  threshold_note_en: t_floor = 2.0 mm
+  external_dependency_en: null
+  applies_to:
+  - RectangularPocket
+  - GeneralPocket
+  uses_relations: []
+  affects_kpi:
+  - kpi_tool_wear_proxy
+  - kpi_rest_material_indicator
+  - kpi_collision_indicator
+  validation_status: candidate
+  source_reference: null
+  recommendation_text: null
+  validity_context_note: null
+  v31_condition: derived_floor_thickness >= 2.0
+  v31_applies_to:
+  - Pocket
+- id: H12
+  status: rewritten
+  label_en: H12 — Minimum web between holes
+  grade: hard
+  scope_en: feature pair
+  statement_en: Keep the material web between two same-host parallel holes (axis spacing minus the mean of both diameters)
+    at or above 2 mm.
+  expression_page: HOLE_SPACING(A,B).axisSpacing − (diameter(A) + diameter(B)) / 2 >= 2.0
+  condition: HOLE_SPACING(A,B).axisSpacing - (diameter(A) + diameter(B)) / 2 >= 2.0
+  threshold_value: 2.0
+  threshold_note_en: t_hole_web = 2.0 mm
+  external_dependency_en: null
+  applies_to:
+  - BlindHole
+  - Counterbore
+  - Countersink
+  - StepBore
+  - ThroughHole
+  uses_relations:
+  - HOLE_SPACING
+  affects_kpi:
+  - kpi_collision_indicator
+  - kpi_workpiece_stiffness
+  validation_status: candidate
+  source_reference: null
+  recommendation_text: null
+  validity_context_note: null
+  v31_condition: distanceValue >= max(diameter(A), diameter(B))
+  v31_applies_to:
+  - BlindHole
+  - ThroughHole
+- id: H13
+  status: rewritten
+  label_en: H13 — Hole coaxial with its boss
+  grade: informational
+  scope_en: single feature (conditional)
+  statement_en: If a hole is located on a circular boss, at least one hole located on that boss shall be coaxial with it.
+  expression_page: '(∃ h ∈ Hole : LOCATED_ON(h, B)) → (∃ h′ : LOCATED_ON(h′, B) ∧ COAXIAL(h′, B))'
+  condition: '(exists h in Hole : LOCATED_ON(h, B)) -> (exists h'' : LOCATED_ON(h'', B) and COAXIAL(h'', B))'
+  threshold_value: null
+  threshold_note_en: —
+  external_dependency_en: null
+  applies_to:
+  - CircularBoss
+  uses_relations:
+  - LOCATED_ON
+  - COAXIAL
+  affects_kpi:
+  - kpi_workpiece_stiffness
+  validation_status: candidate
+  source_reference: null
+  recommendation_text: null
+  validity_context_note: null
+  v31_condition: exists(concentric_with) zwischen ThroughHole und Boss
+  v31_applies_to:
+  - Boss
+  - ThroughHole
+- id: H14
+  status: retired
+  label_en: H14 — Boss without undercut
+  grade: —
+  scope_en: single feature
+  statement_en: Avoid undercut geometry on a boss because it requires special tooling and reduces tool accessibility.
+  expression_page: —
+  condition: null
+  threshold_value: null
+  threshold_note_en: —
+  external_dependency_en: null
+  applies_to: []
+  uses_relations: []
+  affects_kpi:
+  - kpi_collision_indicator
+  validation_status: candidate
+  source_reference: null
+  recommendation_text: null
+  validity_context_note: null
+  v31_condition: keine Hinterschnittgeometrie am Boss (Geometrieprüfung)
+  v31_applies_to:
+  - Boss
+  retired_reason_en: Undercut and accessibility judgements are not something this pipeline produces, so the rule has no operand it can name inside the ontology.
+- id: H15
+  status: rewritten
+  label_en: H15 — Minimum pocket-to-pocket clearance
+  grade: hard
+  scope_en: feature pair
+  statement_en: Keep at least 3 mm of side-wall clearance between two same-host pockets.
+  expression_page: POCKET_CLEARANCE(A,B).pocketClearance >= 3.0
+  condition: POCKET_CLEARANCE(A,B).pocketClearance >= 3.0
+  threshold_value: 3.0
+  threshold_note_en: t_pocket_gap = 3.0 mm
+  external_dependency_en: null
+  applies_to:
+  - RectangularPocket
+  - GeneralPocket
+  uses_relations:
+  - POCKET_CLEARANCE
+  affects_kpi:
+  - kpi_collision_indicator
+  - kpi_workpiece_stiffness
+  validation_status: candidate
+  source_reference: null
+  recommendation_text: null
+  validity_context_note: null
+  v31_condition: distanceValue >= 3.0
+  v31_applies_to:
+  - Pocket
+- id: H16
+  status: rewritten
+  label_en: H16 — Minimum slot-to-slot clearance
+  grade: hard
+  scope_en: feature pair
+  statement_en: Keep at least 3 mm of opening clearance between two same-host slots.
+  expression_page: SLOT_CLEARANCE(A,B).slotClearance >= 3.0
+  condition: SLOT_CLEARANCE(A,B).slotClearance >= 3.0
+  threshold_value: 3.0
+  threshold_note_en: t_slot_gap = 3.0 mm
+  external_dependency_en: null
+  applies_to:
+  - RectangularSlot
+  - TriangularSlot
+  - CircularSlot
+  - GeneralSlot
+  uses_relations:
+  - SLOT_CLEARANCE
+  affects_kpi:
+  - kpi_collision_indicator
+  - kpi_workpiece_stiffness
+  validation_status: candidate
+  source_reference: null
+  recommendation_text: null
+  validity_context_note: null
+  v31_condition: distanceValue >= 3.0
+  v31_applies_to:
+  - Slot
+- id: H17
+  status: rewritten
+  label_en: H17 — Minimum slot width
+  grade: hard
+  scope_en: single feature
+  statement_en: Keep the smaller of the opening and bottom widths of a rectangular slot at or above 3 mm.
+  expression_page: min(min_opening_width, min_bottom_width) >= 3.0
+  condition: min(min_opening_width, min_bottom_width) >= 3.0
+  threshold_value: 3.0
+  threshold_note_en: t_slot_width = 3.0 mm
+  external_dependency_en: null
+  applies_to:
+  - RectangularSlot
+  uses_relations: []
+  affects_kpi:
+  - kpi_tool_changes
+  validation_status: candidate
+  source_reference: null
+  recommendation_text: null
+  validity_context_note: null
+  v31_condition: width >= 3.0
+  v31_applies_to:
+  - Slot
+- id: H18
+  status: rewritten
+  label_en: H18 — Common base-hole diameter for nearby holes
+  grade: advisory
+  scope_en: feature pair
+  statement_en: Holes whose axis spacing is at most three times the larger diameter shall share one base-hole diameter (within
+    0.05 mm).
+  expression_page: |-
+    HOLE_SPACING(A,B).axisSpacing <= 3 × max(diameter(A), diameter(B))
+      → |diameter(A) − diameter(B)| <= 0.05
+  condition: HOLE_SPACING(A,B).axisSpacing <= 3 * max(diameter(A), diameter(B)) -> |diameter(A) - diameter(B)| <= 0.05
+  threshold_value: null
+  threshold_note_en: t_hole_near = 3; tol_diameter = 0.05 mm
+  external_dependency_en: null
+  applies_to:
+  - BlindHole
+  - Counterbore
+  - Countersink
+  - StepBore
+  - ThroughHole
+  uses_relations:
+  - HOLE_SPACING
+  affects_kpi:
+  - kpi_tool_changes
+  validation_status: candidate
+  source_reference: null
+  recommendation_text: null
+  validity_context_note: null
+  v31_condition: diameter(A) == diameter(B) für A has_distance_to B
+  v31_applies_to:
+  - Countersink
+  - ThroughHole
+  - BlindHole
+  - Counterbore
+- id: H19
+  status: rewritten
+  label_en: H19 — Pocket corner-radius-to-depth ratio
+  grade: advisory
+  scope_en: single feature
+  statement_en: Keep the minimum concave internal corner radius of a pocket at least one third of its depth.
+  expression_page: derived_ratio_min_corner_radius_to_depth >= 0.33
+  condition: derived_ratio_min_corner_radius_to_depth >= 0.33
+  threshold_value: 0.33
+  threshold_note_en: t_corner_depth_ratio = 0.33
+  external_dependency_en: null
+  applies_to:
+  - RectangularPocket
+  - GeneralPocket
+  uses_relations: []
+  affects_kpi:
+  - kpi_tool_wear_proxy
+  - kpi_machining_time
+  validation_status: candidate
+  source_reference: null
+  recommendation_text: null
+  validity_context_note: null
+  v31_condition: derived_ratio_corner_radius_to_depth >= 0.33
+  v31_applies_to:
+  - Pocket
+- id: H20
+  status: rewritten
+  label_en: H20 — Flat pocket bottom
+  grade: informational
+  scope_en: single feature
+  statement_en: Prefer a pocket whose floor is flat.
+  expression_page: pocket_bottom_type == flat
+  condition: pocket_bottom_type == flat
+  threshold_value: null
+  threshold_note_en: Controlled set, no numeric threshold
+  external_dependency_en: null
+  applies_to:
+  - RectangularPocket
+  - GeneralPocket
+  uses_relations: []
+  affects_kpi:
+  - kpi_machining_time
+  validation_status: candidate
+  source_reference: null
+  recommendation_text: null
+  validity_context_note: null
+  v31_condition: bottom_shape_type == 'flat'
+  v31_applies_to:
+  - Pocket
+- id: H21
+  status: rewritten
+  label_en: H21 — Vertical walls
+  grade: advisory
+  scope_en: single feature
+  statement_en: Keep the maximum wall draft angle at or below 0.5 degree (for CircularBoss the derived wall draft angle).
+  expression_page: |-
+    max_wall_draft_angle <= 0.5°
+    (on CircularBoss read derived_wall_draft_angle <= 0.5° instead)
+  condition: 'max_wall_draft_angle <= 0.5 deg (CircularBoss: derived_wall_draft_angle <= 0.5 deg)'
+  threshold_value: null
+  threshold_note_en: tol_draft_zero = 0.5°
+  external_dependency_en: null
+  applies_to:
+  - RectangularSlot
+  - RectangularPocket
+  - GeneralPocket
+  - ThroughCut
+  - RectangularBoss
+  - GeneralBoss
+  - CircularBoss
+  uses_relations: []
+  affects_kpi:
+  - kpi_machining_time
+  validation_status: candidate
+  source_reference: null
+  recommendation_text: null
+  validity_context_note: null
+  v31_condition: wall_draft_angle == 0
+  v31_applies_to:
+  - Pocket
+- id: H22
+  status: rewritten
+  label_en: H22 — Entry blind hole for a deep pocket
+  grade: advisory
+  scope_en: single feature (conditional)
+  statement_en: A pocket at least 10 mm deep shall have a blind hole located on it as a plunge entry.
+  expression_page: 'depth >= 10 → ∃ h ∈ BlindHole : LOCATED_ON(h, P)'
+  condition: 'depth >= 10 -> exists h in BlindHole : LOCATED_ON(h, P)'
+  threshold_value: 10
+  threshold_note_en: t_pocket_entry_depth = 10 mm
+  external_dependency_en: null
+  applies_to:
+  - RectangularPocket
+  - GeneralPocket
+  uses_relations:
+  - LOCATED_ON
+  affects_kpi:
+  - kpi_tool_changes
+  - kpi_machining_time
+  validation_status: candidate
+  source_reference: null
+  recommendation_text: null
+  validity_context_note: null
+  v31_condition: is_open_state == 'closed' and depth >= 10 => exists(blindhole adjacent_to pocket)
+  v31_applies_to:
+  - BlindHole
+  - Pocket
+- id: H23
+  status: rewritten
+  label_en: H23 — Slot depth-to-width ratio
+  grade: advisory
+  scope_en: single feature
+  statement_en: Keep the depth of a slot at or below four times its most restrictive width.
+  expression_page: derived_ratio_depth_to_min_width <= 4
+  condition: derived_ratio_depth_to_min_width <= 4
+  threshold_value: 4
+  threshold_note_en: t_slot_ld = 4
+  external_dependency_en: null
+  applies_to:
+  - RectangularSlot
+  uses_relations: []
+  affects_kpi:
+  - kpi_machining_time
+  - kpi_tool_wear_proxy
+  validation_status: candidate
+  source_reference: null
+  recommendation_text: null
+  validity_context_note: null
+  v31_condition: derived_ratio_depth_to_width <= 4
+  v31_applies_to:
+  - Slot
+- id: H26
+  status: rewritten
+  label_en: H26 — Uniform compound-hole operation geometry
+  grade: advisory
+  scope_en: part-level aggregate (grouped)
+  statement_en: 'Within a same-host group of one compound-hole leaf class, use one operation geometry: equal counterbore diameter
+    and depth (within 0.05 mm) for counterbores, or equal countersink diameter (within 0.05 mm) and included angle (within
+    1 degree) for countersinks.'
+  expression_page: |-
+    group = (LOCATED_ON host, leaf class), members per group >= 2
+    Counterbore group: distinct((counterbore_diameter, counterbore_depth), 0.05) == 1
+    Countersink group: distinct((countersink_diameter, derived_countersink_angle), (0.05, 1°)) == 1
+  condition: 'group = (LOCATED_ON host owner, leaf class), group size >= 2; Counterbore group: distinct((counterbore_diameter,
+    counterbore_depth), 0.05) == 1; Countersink group: distinct((countersink_diameter, derived_countersink_angle), (0.05,
+    1 deg)) == 1'
+  threshold_value: null
+  threshold_note_en: tol_dim = 0.05 mm; tol_angle = 1.0°
+  external_dependency_en: null
+  applies_to:
+  - Counterbore
+  - Countersink
+  uses_relations:
+  - LOCATED_ON
+  affects_kpi:
+  - kpi_tool_changes
+  validation_status: candidate
+  source_reference: null
+  recommendation_text: null
+  validity_context_note: null
+  v31_condition: senkungstyp und Maße einheitlich für alle Senkungen eines Patterns
+  v31_applies_to:
+  - Counterbore
+  - Countersink
+- id: H27
+  status: rewritten
+  label_en: H27 — Normal hole entry
+  grade: hard
+  scope_en: feature pair
+  statement_en: Every LOCATED_ON terminal of a hole shall rest on a planar host face whose normal is parallel to the hole
+    axis within 1 degree.
+  expression_page: |-
+    ∀ t ∈ LOCATED_ON(Hole, ·).terminals :
+      t.hostSurfaceType == PLANE ∧ ∠(feature_axis, t.hostSurfaceNormal) <= 1°
+  condition: 'forall t in LOCATED_ON(Hole, *).terminals : t.hostSurfaceType == PLANE and angle(feature_axis, t.hostSurfaceNormal)
+    <= 1 deg'
+  threshold_value: null
+  threshold_note_en: t_normal_entry = 1.0°
+  external_dependency_en: null
+  applies_to:
+  - BlindHole
+  - Counterbore
+  - Countersink
+  - StepBore
+  - ThroughHole
+  uses_relations:
+  - LOCATED_ON
+  affects_kpi:
+  - kpi_machining_time
+  - kpi_tool_wear_proxy
+  validation_status: candidate
+  source_reference: null
+  recommendation_text: null
+  validity_context_note: null
+  v31_condition: hasDirection(Bohrung) parallel zu Normalenrichtung der Eintrittsfläche
+  v31_applies_to:
+  - BlindHole
+  - ThroughHole
+  - PlanarFace
+- id: H28
+  status: kept
+  label_en: H28 — Minimum blind-hole floor thickness
+  grade: hard
+  scope_en: single feature
+  statement_en: Keep at least 2 mm of remaining material below a blind-hole bottom.
+  expression_page: derived_floor_thickness >= 2.0
+  condition: derived_floor_thickness >= 2.0
+  threshold_value: 2.0
+  threshold_note_en: t_floor = 2.0 mm
+  external_dependency_en: null
+  applies_to:
+  - BlindHole
+  uses_relations: []
+  affects_kpi:
+  - kpi_workpiece_stiffness
+  validation_status: candidate
+  source_reference: null
+  recommendation_text: null
+  validity_context_note: null
+  v31_condition: derived_floor_thickness >= 2.0
+  v31_applies_to:
+  - BlindHole
+- id: H30
+  status: rewritten
+  label_en: H30 — Monotonic diameter along a coaxial hole chain
+  grade: advisory
+  scope_en: feature pair (chain)
+  statement_en: Along a chain of coaxial, directly adjacent holes with a single non-hole entry and consistent machining directions,
+    the diameter shall not increase when traversed from the entry.
+  expression_page: |-
+    chain(C) = a connected component of Holes formed by COAXIAL ∧ DIRECT_ADJACENT
+    entry(C) = the members of C that carry LOCATED_ON whose host owner is not a Hole
+    |entry(C)| == 1 ∧ ∀ m, m′ ∈ C publishing machining_direction :
+      machining_direction(m) · machining_direction(m′) > 0
+      → traversing the chain from entry, diameter is non-increasing
+  condition: 'chain(C) = connected component of Hole nodes under (COAXIAL and DIRECT_ADJACENT); entry(C) = members of C having
+    a LOCATED_ON whose host owner is not a Hole; |entry(C)| == 1 and forall m, m'' in C publishing machining_direction : machining_direction(m)
+    . machining_direction(m'') > 0 -> diameter is non-increasing when C is traversed from entry'
+  threshold_value: null
+  threshold_note_en: —
+  external_dependency_en: null
+  applies_to:
+  - BlindHole
+  - Counterbore
+  - Countersink
+  - StepBore
+  - ThroughHole
+  uses_relations:
+  - COAXIAL
+  - DIRECT_ADJACENT
+  - LOCATED_ON
+  affects_kpi:
+  - kpi_machining_time
+  validation_status: candidate
+  source_reference: null
+  recommendation_text: null
+  validity_context_note: Counterbore comparison is directly evaluable from final feature geometry. The multi-feature case
+    additionally requires a coaxial relation and an externally supplied order from entry toward increasing depth; this ontology
+    does not invent an axial-order property.
+  v31_condition: diameter monoton fallend über depth für koaxiale Stufen
+  v31_applies_to:
+  - Counterbore
+  - ThroughHole
+- id: H34
+  status: rewritten
+  label_en: H34 — Limit distinct fillet radii
+  grade: advisory
+  scope_en: part-level aggregate
+  statement_en: Limit a part to at most two distinct fillet radii (within 0.05 mm).
+  expression_page: distinct(fillet_radius over Fillet in part, 0.05) <= 2
+  condition: distinct(fillet_radius over Fillet in part, 0.05) <= 2
+  threshold_value: 2
+  threshold_note_en: t_fillet_variety = 2; tol_fillet_radius = 0.05 mm
+  external_dependency_en: null
+  applies_to:
+  - Fillet
+  uses_relations: []
+  affects_kpi:
+  - kpi_tool_changes
+  - kpi_machining_time
+  validation_status: candidate
+  source_reference: null
+  recommendation_text: null
+  validity_context_note: null
+  v31_condition: count(distinct cornerRadius über alle Fillets) <= 2
+  v31_applies_to:
+  - Fillet
+- id: H35
+  status: rewritten
+  label_en: H35 — Uniform chamfer angle
+  grade: advisory
+  scope_en: part-level aggregate
+  statement_en: 'Use one chamfer angle throughout a part (distinct min_chamfer_angle values within 0.5 degree: at most 1).'
+  expression_page: distinct(min_chamfer_angle over Chamfer in part, 0.5°) <= 1
+  condition: distinct(min_chamfer_angle over Chamfer in part, 0.5 deg) <= 1
+  threshold_value: 1
+  threshold_note_en: t_chamfer_variety = 1; tol_chamfer_angle = 0.5°
+  external_dependency_en: null
+  applies_to:
+  - Chamfer
+  uses_relations: []
+  affects_kpi:
+  - kpi_tool_changes
+  validation_status: candidate
+  source_reference: null
+  recommendation_text: null
+  validity_context_note: null
+  v31_condition: count(distinct (Fasenwinkel, Fasenbreite) über alle Chamfers) <= 1
+  v31_applies_to:
+  - Chamfer
+- id: H36
+  status: rewritten
+  label_en: H36 — Edge-treatment tool availability
+  grade: advisory
+  scope_en: single feature
+  statement_en: Choose chamfer angle and width, or fillet radius, to match an edge tool available in the target machine magazine.
+  expression_page: |-
+    Chamfer: ∃ tool ∈ EXT.edge_tools :
+      |min_chamfer_angle − tool.angle| <= 0.5° ∧ chamfer_width <= tool.max_width
+    Fillet: ∃ tool ∈ EXT.edge_tools : |fillet_radius − tool.radius| <= 0.05
+  condition: 'Chamfer: exists tool in tool_magazine(machine).edge_tools : |min_chamfer_angle - tool.angle| <= 0.5 deg and
+    chamfer_width <= tool.max_width; Fillet: exists tool in tool_magazine(machine).edge_tools : |fillet_radius - tool.radius|
+    <= 0.05'
+  threshold_value: null
+  threshold_note_en: tol_chamfer_angle = 0.5°; tol_fillet_radius = 0.05 mm
+  external_dependency_en: tool magazine
+  applies_to:
+  - Chamfer
+  - Fillet
+  uses_relations: []
+  affects_kpi:
+  - kpi_machining_time
+  - kpi_tool_changes
+  validation_status: candidate
+  source_reference: null
+  recommendation_text: null
+  validity_context_note: null
+  v31_condition: fasen_/radiusmaß in tool_magazine(machine).edge_tools
+  v31_applies_to:
+  - Fillet
+  - Chamfer
+- id: H37
+  status: rewritten
+  label_en: H37 — Minimum clearance around a boss
+  grade: hard
+  scope_en: single feature
+  statement_en: Keep at least 3 mm of free space around a boss.
+  expression_page: derived_min_clearance >= 3.0
+  condition: derived_min_clearance >= 3.0
+  threshold_value: 3.0
+  threshold_note_en: t_boss_clearance = 3.0 mm
+  external_dependency_en: null
+  applies_to:
+  - CircularBoss
+  - RectangularBoss
+  - GeneralBoss
+  uses_relations: []
+  affects_kpi:
+  - kpi_machining_time
+  - kpi_collision_indicator
+  validation_status: candidate
+  source_reference: null
+  recommendation_text: null
+  validity_context_note: null
+  v31_condition: distanceValue >= 3.0
+  v31_applies_to:
+  - Boss
+- id: H38
+  status: kept
+  label_en: H38 — Rectangular-boss slenderness ratio
+  grade: advisory
+  scope_en: single feature
+  statement_en: Keep the height-to-minimum-thickness ratio of a rectangular boss at or below 10.
+  expression_page: derived_ratio_height_to_thickness <= 10
+  condition: derived_ratio_height_to_thickness <= 10
+  threshold_value: 10
+  threshold_note_en: t_boss_slenderness = 10
+  external_dependency_en: null
+  applies_to:
+  - RectangularBoss
+  uses_relations: []
+  affects_kpi:
+  - kpi_workpiece_stiffness
+  - kpi_tool_wear_proxy
+  validation_status: candidate
+  source_reference: null
+  recommendation_text: null
+  validity_context_note: null
+  v31_condition: derived_ratio_height_to_thickness <= 10
+  v31_applies_to:
+  - RectangularBoss
+- id: H39
+  status: retired
+  label_en: H39 — Coplanar related planar faces
+  grade: —
+  scope_en: feature pair
+  statement_en: Place related planar faces at the same level where possible so that they can be machined in one face-milling
+    pass.
+  expression_page: —
+  condition: null
+  threshold_value: null
+  threshold_note_en: —
+  external_dependency_en: null
+  applies_to: []
+  uses_relations: []
+  affects_kpi:
+  - kpi_machining_time
+  - kpi_tool_changes
+  validation_status: candidate
+  source_reference: null
+  recommendation_text: null
+  validity_context_note: null
+  v31_condition: hoehenversatz(A, B) == 0 für A parallel_to B
+  v31_applies_to:
+  - PlanarFace
+  retired_reason_en: Grouping into machining areas is not something this pipeline produces, and coplanarity does not stand for identity of machining area, so COPLANAR is not materialised in the ontology and the rule has no carrier it can name.
+- id: H41
+  status: rewritten
+  label_en: H41 — Minimum internal corner angle
+  grade: hard
+  scope_en: single feature
+  statement_en: Keep the minimum concave internal corner angle of a pocket or through cut at or above 90 degrees.
+  expression_page: min_corner_angle >= 90
+  condition: min_corner_angle >= 90
+  threshold_value: 90
+  threshold_note_en: t_corner_angle = 90°
+  external_dependency_en: null
+  applies_to:
+  - RectangularPocket
+  - GeneralPocket
+  - ThroughCut
+  uses_relations: []
+  affects_kpi:
+  - kpi_rest_material_indicator
+  - kpi_machining_time
+  validation_status: candidate
+  source_reference: null
+  recommendation_text: null
+  validity_context_note: null
+  v31_condition: min_eckwinkel >= 90
+  v31_applies_to:
+  - ThroughCut
+  - Pocket
+- id: H42
+  status: rewritten
+  label_en: H42 — Use freeform faces only when required
+  grade: informational
+  scope_en: single feature
+  statement_en: Use a freeform face only when it is required by the part function.
+  expression_page: featureType == FreeformFace → EXT.required_by_function(feature)
+  condition: featureType == FreeformFace -> design_intent.required_by_function(feature)
+  threshold_value: null
+  threshold_note_en: —
+  external_dependency_en: design intent
+  applies_to:
+  - FreeformFace
+  uses_relations: []
+  affects_kpi:
+  - kpi_machining_time
+  validation_status: candidate
+  source_reference: null
+  recommendation_text: null
+  validity_context_note: null
+  v31_condition: not exists(FreeformFace) sofern Funktion Freiform nicht erfordert
+  v31_applies_to:
+  - FreeformFace
+- id: H43
+  status: rewritten
+  label_en: H43 — Minimum through-cut corner radius
+  grade: hard
+  scope_en: single feature
+  statement_en: Keep the minimum concave internal corner radius of a through cut at or above 3 mm.
+  expression_page: min_corner_radius >= 3.0
+  condition: min_corner_radius >= 3.0
+  threshold_value: 3.0
+  threshold_note_en: t_throughcut_corner_radius = 3.0 mm
+  external_dependency_en: null
+  applies_to:
+  - ThroughCut
+  uses_relations: []
+  affects_kpi:
+  - kpi_machining_time
+  - kpi_tool_changes
+  validation_status: candidate
+  source_reference: null
+  recommendation_text: null
+  validity_context_note: null
+  v31_condition: cornerRadius >= 3.0
+  v31_applies_to:
+  - ThroughCut
+- id: H45
+  status: rewritten
+  label_en: H45 — Tool length-to-diameter capability
+  grade: hard
+  scope_en: single feature
+  statement_en: Keep the hole depth-to-diameter ratio within the maximum L/D reachable by the available tools.
+  expression_page: derived_ratio_depth_to_diameter <= EXT.max_LD
+  condition: derived_ratio_depth_to_diameter <= tool_magazine(machine).max_length_to_diameter
+  threshold_value: null
+  threshold_note_en: —
+  external_dependency_en: tool magazine
+  applies_to:
+  - BlindHole
+  uses_relations: []
+  affects_kpi:
+  - kpi_machining_time
+  - kpi_tool_wear_proxy
+  validation_status: candidate
+  source_reference: null
+  recommendation_text: null
+  validity_context_note: null
+  v31_condition: derived_ratio_depth_to_diameter <= max_LD(tool_magazine(machine))
+  v31_applies_to:
+  - BlindHole
+- id: H46
+  status: rewritten
+  label_en: H46 — Minimum intersecting-hole angle
+  grade: hard
+  scope_en: feature pair
+  statement_en: Keep the crossing angle between two intersecting holes at or above 45 degrees.
+  expression_page: INTERSECTS(A,B).crossingAngle >= 45
+  condition: INTERSECTS(A,B).crossingAngle >= 45
+  threshold_value: 45
+  threshold_note_en: t_crossing_angle = 45°
+  external_dependency_en: null
+  applies_to:
+  - BlindHole
+  - Counterbore
+  - Countersink
+  - StepBore
+  - ThroughHole
+  uses_relations:
+  - INTERSECTS
+  affects_kpi:
+  - kpi_rest_material_indicator
+  - kpi_tool_wear_proxy
+  validation_status: candidate
+  source_reference: null
+  recommendation_text: null
+  validity_context_note: null
+  v31_condition: kreuzungswinkel >= 45
+  v31_applies_to:
+  - ThroughHole
+- id: H47
+  status: retired
+  label_en: H47 — Cavity without undercut
+  grade: —
+  scope_en: single feature
+  statement_en: Avoid undercut geometry in pockets and slots because it requires a dedicated T-slot, disk, or other special
+    cutter and a separate operation.
+  expression_page: —
+  condition: null
+  threshold_value: null
+  threshold_note_en: —
+  external_dependency_en: null
+  applies_to: []
+  uses_relations: []
+  affects_kpi:
+  - kpi_machining_time
+  - kpi_collision_indicator
+  - kpi_tool_changes
+  validation_status: candidate
+  source_reference: null
+  recommendation_text: null
+  validity_context_note: null
+  v31_condition: keine Hinterschnittgeometrie in der Kavität (Geometrieprüfung)
+  v31_applies_to:
+  - Slot
+  - Pocket
+  retired_reason_en: Undercut and accessibility judgements are not something this pipeline produces, so the rule has no operand it can name inside the ontology.
+- id: H48
+  status: rewritten
+  label_en: H48 — Limit tool-axis orientations
+  grade: advisory
+  scope_en: part-level aggregate
+  statement_en: Limit the axis-bearing features of a part to at most two distinct feature_axis directions (within 0.5 degree).
+  expression_page: |-
+    distinct(feature_axis over AxisBearingLeaf in part, 0.5°) <= 2
+    AxisBearingLeaf = the 14 leaf classes publishing feature_axis, minus ThroughCut
+  condition: distinct(feature_axis over AxisBearingLeaf in part, 0.5 deg) <= 2; AxisBearingLeaf = the 14 leaf classes publishing
+    feature_axis minus ThroughCut
+  threshold_value: 2
+  threshold_note_en: t_axis_variety = 2; tol_axis = 0.5°
+  external_dependency_en: null
+  applies_to:
+  - BlindHole
+  - CircularBoss
+  - CircularSlot
+  - Counterbore
+  - Countersink
+  - GeneralBoss
+  - GeneralPocket
+  - GeneralSlot
+  - RectangularBoss
+  - RectangularPocket
+  - RectangularSlot
+  - StepBore
+  - ThroughHole
+  - TriangularSlot
+  uses_relations: []
+  affects_kpi:
+  - kpi_machining_time
+  validation_status: candidate
+  source_reference: null
+  recommendation_text: null
+  validity_context_note: null
+  v31_condition: count(distinct hasDirection über alle Features) <= 2
+  v31_applies_to:
+  - ManufacturingFeature
+- id: H49
+  status: rewritten
+  label_en: H49 — Limit distinct hole diameters
+  grade: advisory
+  scope_en: part-level aggregate
+  statement_en: Limit a part to at most five distinct through- and blind-hole diameters (within 0.05 mm).
+  expression_page: distinct(diameter over ThroughHole ∪ BlindHole in part, 0.05) <= 5
+  condition: distinct(diameter over ThroughHole union BlindHole in part, 0.05) <= 5
+  threshold_value: 5
+  threshold_note_en: t_diameter_variety = 5; tol_diameter = 0.05 mm
+  external_dependency_en: null
+  applies_to:
+  - ThroughHole
+  - BlindHole
+  uses_relations: []
+  affects_kpi:
+  - kpi_tool_changes
+  validation_status: candidate
+  source_reference: null
+  recommendation_text: null
+  validity_context_note: null
+  v31_condition: count(distinct diameter über alle Bohrungen) <= 5
+  v31_applies_to:
+  - BlindHole
+  - ThroughHole
+- id: H50
+  status: rewritten
+  label_en: H50 — Feature extent within usable tool length
+  grade: hard
+  scope_en: single feature
+  statement_en: Keep blind-hole, slot and pocket depth, and the maximum face extent of a step, within the usable cutting length
+    of a standard tool.
+  expression_page: |-
+    BlindHole / the four Slot leaves / the two Pocket leaves: depth <= EXT.max_usable_length
+    Step: max_face_extent <= EXT.max_usable_length
+  condition: 'BlindHole / Slot leaves / Pocket leaves: depth <= tool_magazine(machine).max_usable_length; Step: max_face_extent
+    <= tool_magazine(machine).max_usable_length'
+  threshold_value: null
+  threshold_note_en: —
+  external_dependency_en: tool magazine
+  applies_to:
+  - BlindHole
+  - RectangularSlot
+  - TriangularSlot
+  - CircularSlot
+  - GeneralSlot
+  - RectangularPocket
+  - GeneralPocket
+  - Step
+  uses_relations: []
+  affects_kpi:
+  - kpi_machining_time
+  - kpi_tool_wear_proxy
+  validation_status: candidate
+  source_reference: null
+  recommendation_text: null
+  validity_context_note: null
+  v31_condition: depth (bzw. height bei Step) <= max_nutzlaenge(tool_magazine(machine))
+  v31_applies_to:
+  - BlindHole
+  - Slot
+  - Pocket
+  - Step
+- id: H51
+  status: new
+  label_en: H51 — Minimum remaining wall thickness around a feature
+  grade: hard
+  scope_en: single feature
+  statement_en: Keep the remaining wall thickness around a removal feature at or above 1 mm.
+  expression_page: derived_min_wall_thickness >= 1.0
+  condition: derived_min_wall_thickness >= 1.0
+  threshold_value: 1.0
+  threshold_note_en: t_min_wall = 1.0 mm
+  external_dependency_en: null
+  applies_to:
+  - BlindHole
+  - CircularSlot
+  - Counterbore
+  - Countersink
+  - GeneralPocket
+  - GeneralSlot
+  - RectangularPocket
+  - RectangularSlot
+  - StepBore
+  - ThroughCut
+  - ThroughHole
+  - TriangularSlot
+  uses_relations: []
+  affects_kpi: []
+  validation_status: candidate
+  source_reference: null
+  recommendation_text: null
+  validity_context_note: null
+  v31_condition: null
+  v31_applies_to: []
+- id: H52
+  status: new
+  label_en: H52 — Standard countersink angle
+  grade: advisory
+  scope_en: single feature
+  statement_en: Use a standard countersink included angle of 60, 90 or 120 degrees (within 1 degree, DIN 335).
+  expression_page: '∃ a ∈ {60, 90, 120} : |derived_countersink_angle − a| <= 1°'
+  condition: 'exists a in {60, 90, 120} : |derived_countersink_angle - a| <= 1 deg'
+  threshold_value: null
+  threshold_note_en: T_countersink_angles = {60, 90, 120} (DIN 335); tol_angle = 1.0°
+  external_dependency_en: null
+  applies_to:
+  - Countersink
+  uses_relations: []
+  affects_kpi: []
+  validation_status: candidate
+  source_reference: null
+  recommendation_text: null
+  validity_context_note: null
+  v31_condition: null
+  v31_applies_to: []
+- id: H53
+  status: new
+  label_en: H53 — Standard V-slot tool angle
+  grade: advisory
+  scope_en: single feature
+  statement_en: Use a standard V-slot included angle of 30, 45, 60, 90 or 120 degrees (within 1 degree).
+  expression_page: '∃ a ∈ {30, 45, 60, 90, 120} : |v_included_angle − a| <= 1°'
+  condition: 'exists a in {30, 45, 60, 90, 120} : |v_included_angle - a| <= 1 deg'
+  threshold_value: null
+  threshold_note_en: T_v_tool_angles = {30, 45, 60, 90, 120}; tol_angle = 1.0°
+  external_dependency_en: null
+  applies_to:
+  - TriangularSlot
+  uses_relations: []
+  affects_kpi: []
+  validation_status: candidate
+  source_reference: null
+  recommendation_text: null
+  validity_context_note: null
+  v31_condition: null
+  v31_applies_to: []
+- id: H54
+  status: new
+  label_en: H54 — Step included angle
+  grade: hard
+  scope_en: single feature
+  statement_en: Keep the included angle of a step at or above 90 degrees.
+  expression_page: step_included_angle >= 90
+  condition: step_included_angle >= 90
+  threshold_value: 90
+  threshold_note_en: t_step_angle = 90°
+  external_dependency_en: null
+  applies_to:
+  - Step
+  uses_relations: []
+  affects_kpi: []
+  validation_status: candidate
+  source_reference: null
+  recommendation_text: null
+  validity_context_note: null
+  v31_condition: null
+  v31_applies_to: []
+deleted_numbers:
+- id: H24
+  v31_condition: end_shape == 'open'
+  reason_en: Its carrier end_shape has retired (the implementation is always open, which carries no information)
+- id: H25
+  v31_condition: width >= 3.0 and depth <= width
+  reason_en: The Groove class was deleted
+- id: H29
+  v31_condition: derived_min_wall_distance >= diameter
+  reason_en: The meaning came back as H51 under a new number; its carrier derived_min_wall_distance has been replaced by derived_min_wall_thickness
+- id: H31
+  v31_condition: depth - threadDepth >= 3.0
+  reason_en: The ThreadedHole class was deleted
+- id: H32
+  v31_condition: diameter(A) == diameter(B) für A part_of_pattern B
+  reason_en: The ThreadedHole class was deleted, and it depended on the retired rel_part_of_pattern
+- id: H33
+  v31_condition: thread_size in tool_magazine(machine).tap_sizes
+  reason_en: The ThreadedHole class was deleted
+- id: H40
+  v31_condition: cornerRadius >= 3.0 für alle konkaven Kontursegmente
+  reason_en: The OuterContour class was deleted
+- id: H44
+  v31_condition: derived_min_wall_distance >= thickness(wall)
+  reason_en: The WallBreakthrough class was deleted; the remaining-wall-thickness concern is covered by H51's ThroughCut domain

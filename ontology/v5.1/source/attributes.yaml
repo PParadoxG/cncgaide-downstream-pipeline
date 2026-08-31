@@ -1,0 +1,600 @@
+attributes:
+- name: cadFaceIds
+  page_key: cadFaceIds
+  label_en: CAD face ids
+  label_de: CAD-Flaechen-IDs
+  kind: reference
+  range: xsd:string
+  value_space_en: xsd:string, comma-separated identifiers of the source STEP faces
+  definition_en: Identifiers of the source STEP faces the feature is derived from; the provenance anchor into the STEP file.
+  comment_en: Value space changed from the v3.1 'ap242:' / 'p21:#' prefixed form to plain comma-separated integers.
+  iso14649: '- (implementation anchor at STEP file level)'
+  formula: null
+  v31: kept
+- name: posX
+  page_key: pos
+  label_en: position X
+  label_de: Position X
+  kind: reference
+  range: xsd:decimal
+  value_space_en: xsd:decimal, mm, part coordinate system
+  definition_en: X coordinate of the feature reference point in the part coordinate system. Diagnostic locator only; relations
+    never derive distances from it.
+  comment_en: 'Reference point convention: features with a machining direction take the root (floor / base) centre; through
+    features take the axial midpoint; edge treatments and surface features take the area centroid.'
+  iso14649: feature_placement (axis2_placement_3d), reference point part
+  formula: null
+  v31: kept
+- name: posY
+  page_key: pos
+  label_en: position Y
+  label_de: Position Y
+  kind: reference
+  range: xsd:decimal
+  value_space_en: xsd:decimal, mm, part coordinate system
+  definition_en: Y coordinate of the feature reference point in the part coordinate system (see posX).
+  comment_en: null
+  iso14649: feature_placement (axis2_placement_3d), reference point part
+  formula: null
+  v31: kept
+- name: posZ
+  page_key: pos
+  label_en: position Z
+  label_de: Position Z
+  kind: reference
+  range: xsd:decimal
+  value_space_en: xsd:decimal, mm, part coordinate system
+  definition_en: Z coordinate of the feature reference point in the part coordinate system (see posX).
+  comment_en: null
+  iso14649: feature_placement (axis2_placement_3d), reference point part
+  formula: null
+  v31: kept
+- name: feature_axis
+  page_key: feature_axis
+  label_en: feature axis
+  label_de: null
+  kind: vector
+  range: cnc:Direction
+  value_space_en: 'unit vector, undirected: normalized and sign-fixed so that the dominant component is positive'
+  definition_en: 'Undirected axis of the feature: the line along which the opening points to the deepest location (holes,
+    recesses) or the build axis of a boss. Published by 14 leaf classes; coaxial / parallel / orthogonal tests use this property.'
+  comment_en: The sign of the Direction individual carries no meaning for this property.
+  iso14649: 'feature_placement: axis direction (z axis of axis2_placement_3d), undirected'
+  formula: null
+  v31: new (replaces axisDirection)
+- name: machining_direction
+  page_key: machining_direction
+  label_en: machining direction
+  label_de: null
+  kind: vector
+  range: cnc:Direction
+  value_space_en: unit vector, signed, pointing into the material
+  definition_en: 'Signed machining feed direction: from the opening towards the bottom (recesses, blind and compound holes)
+    or from the top towards the support face (bosses). Not published where no unique entry exists (ThroughHole, ThroughCut).'
+  comment_en: null
+  iso14649: 'feature_placement: axis direction (z axis of axis2_placement_3d), signed towards the material'
+  formula: null
+  v31: new (replaces axisDirection)
+- name: surface_normal
+  page_key: surface_normal
+  label_en: surface normal
+  label_de: null
+  kind: vector
+  range: cnc:Direction
+  value_space_en: unit vector, signed, pointing out of the material
+  definition_en: Signed outward normal of a PlanarFace, oriented by the face sense; not normalized to a positive dominant
+    component.
+  comment_en: null
+  iso14649: 'planar_face: face normal'
+  formula: null
+  v31: new (replaces axisDirection on PlanarFace)
+- name: area
+  page_key: area
+  label_en: area
+  label_de: null
+  kind: measured
+  range: xsd:decimal
+  value_space_en: xsd:decimal, mm^2, > 0
+  definition_en: Area of the bounded face feature itself, taken from the parsed part model face.
+  comment_en: null
+  iso14649: '- (project-specific geometric quantity)'
+  formula: null
+  v31: new
+- name: depth
+  page_key: depth
+  label_en: depth
+  label_de: Tiefe
+  kind: measured
+  range: xsd:decimal
+  value_space_en: xsd:decimal, mm, > 0
+  definition_en: 'Axial extent of a removal feature in millimetres. Holes: axial span of the cylindrical wall, excluding a
+    conical bottom; compound holes: total axial extent of the compound; slots: transverse down-cut distance from the mouth
+    chord to the deepest location; pockets: axial distance from the opening to the floor, published only when the terminal
+    region forms a single axial layer.'
+  comment_en: Not carried by ThroughCut (a through cavity has no axial depth).
+  iso14649: depth of the two5D_manufacturing_feature (materialised numerically)
+  formula: null
+  v31: kept
+- name: diameter
+  page_key: diameter
+  label_en: diameter
+  label_de: Durchmesser
+  kind: measured
+  range: xsd:decimal
+  value_space_en: xsd:decimal, mm, > 0
+  definition_en: Diameter of the cylindrical hole wall (twice the cylinder radius). For Counterbore and Countersink it is
+    always the base-hole diameter.
+  comment_en: CircularBoss no longer uses diameter; it publishes base_diameter and top_diameter.
+  iso14649: round_hole.diameter (toleranced_length_measure)
+  formula: null
+  v31: kept (domain narrowed to Hole)
+- name: height
+  page_key: height
+  label_en: height
+  label_de: Hoehe
+  kind: measured
+  range: xsd:decimal
+  value_space_en: xsd:decimal, mm, > 0
+  definition_en: Axial height of a boss from its support face to its top region.
+  comment_en: Step no longer uses height; it publishes min_face_extent / max_face_extent.
+  iso14649: 'boss: height attribute'
+  formula: null
+  v31: kept (domain narrowed to Boss)
+- name: min_face_extent
+  page_key: min_face_extent
+  label_en: minimum face extent
+  label_de: null
+  kind: measured
+  range: xsd:decimal
+  value_space_en: xsd:decimal, mm, > 0
+  definition_en: The shorter of the two principal face extents of a Step, measured perpendicular to the shared edge.
+  comment_en: null
+  iso14649: '- (project-specific geometric quantity)'
+  formula: null
+  v31: new
+- name: max_face_extent
+  page_key: max_face_extent
+  label_en: maximum face extent
+  label_de: null
+  kind: measured
+  range: xsd:decimal
+  value_space_en: xsd:decimal, mm, > 0
+  definition_en: The longer of the two principal face extents of a Step, measured perpendicular to the shared edge.
+  comment_en: null
+  iso14649: '- (project-specific geometric quantity)'
+  formula: null
+  v31: new
+- name: step_included_angle
+  page_key: step_included_angle
+  label_en: step included angle
+  label_de: null
+  kind: measured
+  range: xsd:decimal
+  value_space_en: xsd:decimal, degrees, > 0 and < 180
+  definition_en: Included angle between the two principal faces of a Step, measured on the material side.
+  comment_en: null
+  iso14649: '- (project-specific geometric quantity)'
+  formula: null
+  v31: new
+- name: base_diameter
+  page_key: base_diameter
+  label_en: base diameter
+  label_de: null
+  kind: measured
+  range: xsd:decimal
+  value_space_en: xsd:decimal, mm, > 0
+  definition_en: Diameter of the base station contour of a CircularBoss (at the support face).
+  comment_en: null
+  iso14649: '- (project-specific geometric quantity)'
+  formula: null
+  v31: new (split of diameter on CircularBoss)
+- name: top_diameter
+  page_key: top_diameter
+  label_en: top diameter
+  label_de: null
+  kind: measured
+  range: xsd:decimal
+  value_space_en: xsd:decimal, mm, > 0
+  definition_en: Diameter of the top station contour of a CircularBoss.
+  comment_en: null
+  iso14649: '- (project-specific geometric quantity)'
+  formula: null
+  v31: new (split of diameter on CircularBoss)
+- name: base_thickness
+  page_key: base_thickness
+  label_en: base thickness
+  label_de: null
+  kind: measured
+  range: xsd:decimal
+  value_space_en: xsd:decimal, mm, > 0
+  definition_en: 'Thickness of a RectangularBoss at the base station: the shorter wall-to-wall distance of the base contour.'
+  comment_en: null
+  iso14649: '- (project-specific geometric quantity)'
+  formula: null
+  v31: new (split of thickness)
+- name: top_thickness
+  page_key: top_thickness
+  label_en: top thickness
+  label_de: null
+  kind: measured
+  range: xsd:decimal
+  value_space_en: xsd:decimal, mm, > 0
+  definition_en: 'Thickness of a RectangularBoss at the top station: the shorter wall-to-wall distance of the top contour.'
+  comment_en: null
+  iso14649: '- (project-specific geometric quantity)'
+  formula: null
+  v31: new (split of thickness)
+- name: min_opening_width
+  page_key: min_opening_width
+  label_en: minimum opening width
+  label_de: null
+  kind: measured
+  range: xsd:decimal
+  value_space_en: xsd:decimal, mm, > 0
+  definition_en: 'Wall-to-wall width at the opening station: for slots the chord between the mid-points of the two transverse
+    terminal rails (component perpendicular to the course); for RectangularPocket the shorter wall-to-wall distance of the
+    opening contour.'
+  comment_en: null
+  iso14649: '- (project-specific geometric quantity)'
+  formula: null
+  v31: new (replaces width / min_width at the opening station)
+- name: min_bottom_width
+  page_key: min_bottom_width
+  label_en: minimum bottom width
+  label_de: null
+  kind: measured
+  range: xsd:decimal
+  value_space_en: xsd:decimal, mm, > 0
+  definition_en: Wall-to-wall width at the bottom station, measured along the same direction as min_opening_width.
+  comment_en: Equal to min_opening_width when the walls carry no draft.
+  iso14649: '- (project-specific geometric quantity)'
+  formula: null
+  v31: new (replaces width / min_width at the bottom station)
+- name: profile_radius
+  page_key: profile_radius
+  label_en: profile radius
+  label_de: null
+  kind: measured
+  range: xsd:decimal
+  value_space_en: xsd:decimal, mm, > 0
+  definition_en: Radius of the cylindrical bottom arc of a CircularSlot cross-section; equals half the opening width only
+    in the tangent sub-case.
+  comment_en: null
+  iso14649: '- (project-specific geometric quantity)'
+  formula: null
+  v31: new
+- name: course_length
+  page_key: course_length
+  label_en: course length
+  label_de: null
+  kind: measured
+  range: xsd:decimal
+  value_space_en: xsd:decimal, mm, > 0
+  definition_en: Length of the slot along its course (sweep) direction.
+  comment_en: null
+  iso14649: '- (project-specific geometric quantity)'
+  formula: null
+  v31: new
+- name: min_corner_radius
+  page_key: min_corner_radius
+  label_en: minimum corner radius
+  label_de: null
+  kind: measured
+  range: xsd:decimal
+  value_space_en: xsd:decimal, mm, >= 0 (0 = genuine sharp corner)
+  definition_en: Minimum concave internal corner radius over the union of the two principal contours (opening and floor /
+    second opening) of a Pocket leaf or ThroughCut. Zero is a genuine sharp corner; not published when either contour cannot
+    be resolved.
+  comment_en: 'Carried by both Pocket leaves: the rectangular leaf admits blended corners, so on it the radius is measured
+    rather than implied by the class name.'
+  iso14649: '- (project-specific geometric quantity)'
+  formula: null
+  v31: renamed from cornerRadius
+- name: min_corner_angle
+  page_key: min_corner_angle
+  label_en: minimum corner angle
+  label_de: Minimaler Eckwinkel
+  kind: measured
+  range: xsd:decimal
+  value_space_en: xsd:decimal, degrees, > 0 and < 180
+  definition_en: Minimum concave internal corner angle over the union of the two principal contours of a Pocket leaf or
+    ThroughCut.
+  comment_en: 'On RectangularPocket the class criterion implies 90 degrees, so it is published there as an independent
+    re-check rather than as a varying observation.'
+  iso14649: '- (project-specific geometric quantity)'
+  formula: null
+  v31: kept
+- name: max_wall_draft_angle
+  page_key: max_wall_draft_angle
+  label_en: maximum wall draft angle
+  label_de: null
+  kind: measured
+  range: xsd:decimal
+  value_space_en: xsd:decimal, degrees, >= 0 (0 = genuinely vertical walls)
+  definition_en: Maximum absolute draft angle over all side wall faces, each measured between the face outward normal and
+    the feature axis.
+  comment_en: CircularBoss publishes the derived counterpart derived_wall_draft_angle instead.
+  iso14649: pocket.slope (plane_angle_measure), maximum over walls
+  formula: null
+  v31: renamed from wall_draft_angle
+- name: v_included_angle
+  page_key: v_included_angle
+  label_en: V included angle
+  label_de: null
+  kind: measured
+  range: xsd:decimal
+  value_space_en: xsd:decimal, degrees, > 0 and < 180
+  definition_en: Included angle between the two planar faces of a TriangularSlot cross-section.
+  comment_en: null
+  iso14649: '- (project-specific geometric quantity)'
+  formula: null
+  v31: new
+- name: hole_bottom_type
+  page_key: hole_bottom_type
+  label_en: hole bottom type
+  label_de: null
+  kind: vocabulary
+  range: xsd:string
+  value_space_en: 'xsd:string, vocabulary: flat | conical_118 | conical_135 | rounded'
+  definition_en: 'Controlled classification of the bottom region of a BlindHole: flat (all planar), rounded (all spherical
+    or toroidal), conical_118 / conical_135 (all conical with an included angle within +-1 degree of the standard drill-point
+    value). Other combinations are not classified.'
+  comment_en: null
+  iso14649: round_hole.bottom_condition
+  formula: null
+  v31: renamed from bottom_shape_type (BlindHole only)
+- name: pocket_bottom_type
+  page_key: pocket_bottom_type
+  label_en: pocket bottom type
+  label_de: null
+  kind: vocabulary
+  range: xsd:string
+  value_space_en: 'xsd:string, vocabulary: flat | non_flat | mixed'
+  definition_en: 'Classification of the single-layer floor of a pocket: flat when every floor face is planar, non_flat when
+    none is, mixed when planar and non-planar floor faces coexist on the same layer. Not published when the terminal region
+    is not cleanly separated from adjacent geometry.'
+  comment_en: mixed describes one floor layer, never multiple floor layers.
+  iso14649: '- (project-specific geometric quantity)'
+  formula: null
+  v31: new
+- name: chamfer_width
+  page_key: chamfer_width
+  label_en: chamfer width
+  label_de: null
+  kind: measured
+  range: xsd:decimal
+  value_space_en: xsd:decimal, mm, > 0
+  definition_en: Distance between the two boundary curves of the chamfer face measured along its cross-section (slant width).
+  comment_en: null
+  iso14649: chamfer offset / slant dimension
+  formula: null
+  v31: renamed from width (Chamfer)
+- name: min_chamfer_angle
+  page_key: min_chamfer_angle
+  label_en: minimum chamfer angle
+  label_de: null
+  kind: measured
+  range: xsd:decimal
+  value_space_en: xsd:decimal, degrees, > 0 and < 90
+  definition_en: The smaller of the two acute angles between the chamfer face and its two supporting faces. Not a cone included
+    angle; for a conical chamfer it equals min(half angle, 90 - half angle).
+  comment_en: null
+  iso14649: '- (project-specific geometric quantity)'
+  formula: null
+  v31: renamed from angle (Chamfer), redefined against both supports
+- name: fillet_radius
+  page_key: fillet_radius
+  label_en: fillet radius
+  label_de: null
+  kind: measured
+  range: xsd:decimal
+  value_space_en: xsd:decimal, mm, > 0
+  definition_en: Radius of the circular blend of a Fillet; not published when the blend faces do not agree on one radius.
+  comment_en: null
+  iso14649: Fillet / Edge_round radius (ISO 10303-224)
+  formula: null
+  v31: renamed from cornerRadius (Fillet)
+- name: counterbore_diameter
+  page_key: counterbore_diameter
+  label_en: counterbore diameter
+  label_de: null
+  kind: measured
+  range: xsd:decimal
+  value_space_en: xsd:decimal, mm, > 0
+  definition_en: Diameter of the enlarged cylindrical counterbore section.
+  comment_en: null
+  iso14649: counterbore_hole enlarged-hole diameter
+  formula: null
+  v31: new
+- name: counterbore_depth
+  page_key: counterbore_depth
+  label_en: counterbore depth
+  label_de: null
+  kind: measured
+  range: xsd:decimal
+  value_space_en: xsd:decimal, mm, > 0
+  definition_en: Axial depth of the enlarged cylindrical counterbore section from its entry plane to the shoulder.
+  comment_en: The base-hole length equals depth - counterbore_depth and is not stored separately.
+  iso14649: counterbore_hole enlarged-hole axial depth
+  formula: null
+  v31: new
+- name: countersink_diameter
+  page_key: countersink_diameter
+  label_en: countersink diameter
+  label_de: null
+  kind: measured
+  range: xsd:decimal
+  value_space_en: xsd:decimal, mm, > 0
+  definition_en: Major diameter of the conical countersink section at its entry.
+  comment_en: null
+  iso14649: countersunk_hole major diameter
+  formula: null
+  v31: new
+- name: countersink_depth
+  page_key: countersink_depth
+  label_en: countersink depth
+  label_de: null
+  kind: measured
+  range: xsd:decimal
+  value_space_en: xsd:decimal, mm, > 0
+  definition_en: Axial depth of the conical countersink section from its entry plane to the base-hole rim.
+  comment_en: null
+  iso14649: '- (project-specific geometric quantity)'
+  formula: null
+  v31: new
+- name: derived_countersink_angle
+  page_key: derived_countersink_angle
+  label_en: derived countersink angle
+  label_de: null
+  kind: derived
+  range: xsd:decimal
+  value_space_en: xsd:decimal, degrees, > 0 and < 180
+  definition_en: Included cone angle of the countersink section, derived from the major diameter, the base diameter and the
+    section depth.
+  comment_en: null
+  iso14649: countersink included cone angle (derived)
+  formula: 2 * atan((countersink_diameter - diameter) / (2 * countersink_depth))
+  v31: new (replaces angle on Countersink; demoted to derived)
+- name: derived_wall_draft_angle
+  page_key: derived_wall_draft_angle
+  label_en: derived wall draft angle
+  label_de: null
+  kind: derived
+  range: xsd:decimal
+  value_space_en: xsd:decimal, degrees, >= 0
+  definition_en: Draft angle of a CircularBoss side wall, derived exactly from the two station diameters and the height.
+  comment_en: null
+  iso14649: '- (project-specific materialised derived quantity)'
+  formula: atan((base_diameter - top_diameter) / 2 / height)
+  v31: new
+- name: derived_min_wall_thickness
+  page_key: derived_min_wall_thickness
+  label_en: derived minimum wall thickness
+  label_de: null
+  kind: derived
+  range: xsd:decimal
+  value_space_en: xsd:decimal, mm, >= 0
+  definition_en: Minimum thickness of material remaining between the feature walls and the nearest other surface of the part.
+    Not published when the feature walls face no other surface.
+  comment_en: null
+  iso14649: '- (project-specific materialised derived quantity)'
+  formula: min(distance(feature wall faces, nearest other part surface))
+  v31: renamed from derived_min_wall_distance (stricter definition)
+- name: derived_min_clearance
+  page_key: derived_min_clearance
+  label_en: derived minimum clearance
+  label_de: null
+  kind: derived
+  range: xsd:decimal
+  value_space_en: xsd:decimal, mm, >= 0
+  definition_en: Minimum free space between the outer walls of a boss and the nearest other surface of the part. Not published
+    when the outer walls face no other surface.
+  comment_en: null
+  iso14649: '- (project-specific materialised derived quantity)'
+  formula: min(distance(boss outer wall faces, nearest other part surface))
+  v31: new
+- name: derived_floor_thickness
+  page_key: derived_floor_thickness
+  label_en: derived floor thickness
+  label_de: abgeleitete Bodendicke
+  kind: derived
+  range: xsd:decimal
+  value_space_en: xsd:decimal, mm, >= 0
+  definition_en: 'Remaining material below the bottom of a BlindHole or the single-layer floor of a pocket: distance from
+    the bottom to the first opposite surface along machining_direction.'
+  comment_en: null
+  iso14649: '- (project-specific materialised derived quantity)'
+  formula: distance(feature_floor, first opposite surface along machining_direction)
+  v31: kept
+- name: derived_ratio_depth_to_diameter
+  page_key: derived_ratio_depth_to_diameter
+  label_en: derived ratio depth / diameter (L/D)
+  label_de: abgeleitetes Verhaeltnis Tiefe/Durchmesser (L/D)
+  kind: derived
+  range: xsd:decimal
+  value_space_en: xsd:decimal, dimensionless, > 0
+  definition_en: 'depth / diameter for all four Hole leaves (compound holes: total depth over base diameter).'
+  comment_en: null
+  iso14649: '- (project-specific materialised derived quantity)'
+  formula: depth / diameter
+  v31: kept (formula unified over Hole)
+- name: derived_ratio_depth_to_min_width
+  page_key: derived_ratio_depth_to_min_width
+  label_en: derived ratio depth / minimum width
+  label_de: null
+  kind: derived
+  range: xsd:decimal
+  value_space_en: xsd:decimal, dimensionless, > 0
+  definition_en: 'depth divided by the most restrictive width station: min(min_opening_width, min_bottom_width) where both
+    exist, otherwise min_opening_width.'
+  comment_en: null
+  iso14649: '- (project-specific materialised derived quantity)'
+  formula: depth / min(min_opening_width, min_bottom_width)
+  v31: renamed from derived_ratio_depth_to_width
+- name: derived_ratio_min_corner_radius_to_depth
+  page_key: derived_ratio_min_corner_radius_to_depth
+  label_en: derived ratio minimum corner radius / depth
+  label_de: null
+  kind: derived
+  range: xsd:decimal
+  value_space_en: xsd:decimal, dimensionless, >= 0
+  definition_en: min_corner_radius / depth of a Pocket leaf.
+  comment_en: null
+  iso14649: '- (project-specific materialised derived quantity)'
+  formula: min_corner_radius / depth
+  v31: renamed from derived_ratio_corner_radius_to_depth
+- name: derived_ratio_height_to_thickness
+  page_key: derived_ratio_height_to_thickness
+  label_en: derived ratio height / thickness
+  label_de: abgeleitetes Verhaeltnis Hoehe/Dicke
+  kind: derived
+  range: xsd:decimal
+  value_space_en: xsd:decimal, dimensionless, > 0
+  definition_en: height / min(base_thickness, top_thickness) of a RectangularBoss.
+  comment_en: null
+  iso14649: '- (project-specific materialised derived quantity)'
+  formula: height / min(base_thickness, top_thickness)
+  v31: kept (formula over the two thickness stations)
+deleted_attributes:
+- name: axisDirection
+  reason_en: One field carried two concepts, the undirected axis and the directed feed
+  replaced_by: feature_axis / machining_direction / surface_normal
+- name: width
+  reason_en: The bare name is missing the station; Groove / Slot / Pocket / Chamfer all shared one name
+  replaced_by: min_opening_width / min_bottom_width / chamfer_width
+- name: angle
+  reason_en: On Chamfer the single reference face is a given; on Countersink it is over-defined by the diameter and the section depth
+  replaced_by: min_chamfer_angle / derived_countersink_angle
+- name: thickness
+  reason_en: The bare name is missing the station, and under draft the two stations are not equal
+  replaced_by: base_thickness / top_thickness
+- name: cornerRadius
+  reason_en: On Pocket / ThroughCut it became the minimum over the union of the two principal contours; on Fillet it is the fillet radius; OuterContour was deleted
+  replaced_by: min_corner_radius / fillet_radius
+- name: bottom_shape_type
+  reason_en: The bottom type of a Pocket gets its own vocabulary; on BlindHole it was renamed
+  replaced_by: hole_bottom_type / pocket_bottom_type
+- name: is_open_state
+  reason_en: The Pocket family's criterion is a closed principal wall band, so the value was always closed; openness is carried by the class definition
+  replaced_by: null
+- name: end_shape
+  reason_en: The implementation is always open, which carries no information
+  replaced_by: null
+- name: wall_draft_angle
+  reason_en: The definition is a maximum and the name is missing the aggregation operator
+  replaced_by: max_wall_draft_angle
+- name: derived_min_wall_distance
+  reason_en: Replaced by a stricter definition
+  replaced_by: derived_min_wall_thickness
+- name: derived_ratio_depth_to_width
+  reason_en: The denominator became the most restrictive width station
+  replaced_by: derived_ratio_depth_to_min_width
+- name: derived_ratio_corner_radius_to_depth
+  reason_en: The numerator was renamed
+  replaced_by: derived_ratio_min_corner_radius_to_depth
+- name: threadSize
+  reason_en: ThreadedHole was deleted
+  replaced_by: null
+- name: threadDepth
+  reason_en: ThreadedHole was deleted
+  replaced_by: null

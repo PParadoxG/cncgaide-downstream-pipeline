@@ -1,0 +1,305 @@
+head:
+  note: Relations are the pipeline's own layer, not NX's.  NX publishes no relation between features at all; every
+    edge below is derived by us from what NX did publish (positions, orientations) or from the PartModel topology,
+    or measured through KernelServices.  The six names are also open-source-line names, because the notion really
+    is the same one - but see disjointFromV51.  DIRECT_ADJACENT is not among them, because its only client was H30,
+    which node 19a withdrew, and an edge no rule reads is vocabulary nobody asked for.
+  disjointFromV51: No equivalence is asserted between nx:<name> and cnc:<name>.  The names match because the topological
+    notion matches; the domains, the ranges and the criteria do not.  A reader who treats a shared name as identity
+    here would be repeating the STEP / Step trap of node 19' 1.6.
+  derivedByTiers:
+    nx_arithmetic: Computed from NX's own published attributes; needs no kernel and no topology.
+    nx_topology: Computed from the PartModel; readable from partmodel.json without a kernel.
+    nx_kernel: Measured through KernelServices; needs a live NX session with the part open.
+  authority: 'Every type below carries authority: pipeline. Node 19 4.7.2 asks for the 2:2 authorship split to be
+    legible inside the ontology rather than only in the report - classes and attributes say "nx" because they are
+    transcribed, relations and heuristics say "pipeline" because NX publishes neither.'
+  node: Which node materialises the edge - 20'a needs no licence, 20'b needs one per part.
+  page: label_en / allowed_pairs / page are read only by the single definition page. allowed_pairs is written in NX's own families
+    (STEP / HOLES / POCKETS / SLOTS / BOSSES ...), which the page expands to the reachable leaf classes; the family names are NX's own abstract intermediate classes, not names we invented.
+properties:
+- authority: pipeline
+  name: axisSpacing
+  onType: HOLE_SPACING
+  range: xsd:decimal
+  unit: Length
+  definition_en: Perpendicular distance between the two feature axes.
+  used_by:
+  - H12
+  - H18
+  label_en: axis spacing
+- authority: pipeline
+  name: pocketClearance
+  onType: POCKET_CLEARANCE
+  range: xsd:decimal
+  unit: Length
+  definition_en: Shortest remaining material distance between the side wall face sets of the two pockets,
+    measured only where the two sets are separated.
+  used_by:
+  - H15
+  label_en: pocket clearance
+- authority: pipeline
+  name: slotClearance
+  onType: SLOT_CLEARANCE
+  range: xsd:decimal
+  unit: Length
+  definition_en: Shortest distance between the two slots' opening boundaries, measured only where the two
+    boundaries are separated.
+  used_by:
+  - H16
+  label_en: slot clearance
+- authority: pipeline
+  name: crossingAngle
+  onType: INTERSECTS
+  range: xsd:decimal
+  unit: Angle
+  definition_en: Angle between the two removal axes where the volumes meet.
+  used_by:
+  - H46
+  label_en: crossing angle
+- authority: pipeline
+  name: terminals
+  onType: LOCATED_ON
+  range: nx:LocatedOnTerminal
+  unit: null
+  definition_en: The resolved terminals of the source feature, one record per terminal. A list rather than a scalar
+    because a feature can sit on more than one host face.
+  used_by:
+  - H27
+  label_en: terminals
+terminal:
+  authority: pipeline
+  class: LocatedOnTerminal
+  definition_en: 'One resolved terminal of a feature: the effective host face it opens onto, described by the two
+    properties a rule can currently ask about.'
+  fields:
+  - name: hostSurfaceType
+    range: xsd:string
+    definition_en: The surface type of the host face, from the PartModel. PLANE is the only value any rule tests
+      today; the vocabulary is the PartModel's, not NX's.
+    label_en: host surface type
+  - name: hostSurfaceNormal
+    range: xsd:string
+    definition_en: The outward normal of the host face at the terminal, as a three-component vector.
+    label_en: host surface normal
+  label_en: Located-on terminal record
+types:
+- authority: pipeline
+  label: COAXIAL
+  derivedBy: nx_arithmetic
+  node: 20'a
+  directed: false
+  definition_en: Two features whose feature axes lie on one infinite line, within the frozen angular and offset
+    tolerances.
+  nx_basis: X/Y/Z_POSITION gives the locating point and X/Y/Z_ORIENTATION_D the feed direction; both are published
+    by NX on every feature (node 19' 1.2).  Parallel-and-collinear is then arithmetic.
+  motivated_by:
+  - H13
+  label_en: Coaxial
+  allowed_pairs:
+  - - STEP
+    - STEP
+  - - STEP
+    - HOLES
+  - - HOLES
+    - HOLES
+  - - STEP
+    - BOSS_ROUND_STRAIGHT
+  - - HOLES
+    - BOSS_ROUND_STRAIGHT
+  - - BOSS_ROUND_STRAIGHT
+    - BOSS_ROUND_STRAIGHT
+  page:
+    ab: CX
+    col: '#00a6a6'
+    dir: undirected
+    gov: hole classes (STEP / HOLES) with each other, and hole classes with circular bosses
+    prop: —
+    def: The <b>feature axes of the two features lie on one infinite line</b>, within the frozen angular and offset tolerances.
+    when:
+    - both ends carry <code>X/Y/Z_POSITION</code> and <code>X/Y/Z_ORIENTATION_D</code> - NX publishes them on every feature
+    - the two axes are parallel
+    - the distance between the two infinite axes is within tolerance
+- authority: pipeline
+  label: HOLE_SPACING
+  derivedBy: nx_arithmetic
+  node: 20'a
+  directed: false
+  definition_en: Perpendicular offset between the axes of two hole-like features.
+  nx_basis: Same two attribute groups as COAXIAL; the value is the axis-to-axis perpendicular distance.
+  nxNote: 'cnc:HOLE_SPACING additionally requires the two holes to share a LOCATED_ON host owner, and this
+    side deliberately does not: host *identity* is not comparable across the two lines.  The open-source
+    line merges a physical plane into one PlanarFace, so "same host owner" there means "opening onto the
+    same surface".  NX registers a plane as several SURFACE_PLANAR features and merges no faces, and one
+    raw face can be owned by two features at once, so the same words select a different set of pairs.
+    Node 21'' measured it on 084_818_012_solid_001: with the gate on, the surviving SLOT_CLEARANCE pairs
+    were three degenerate touching ones whose common "host" was a through hole the slots opened into,
+    while the six 0.3 mm SLOT_90_DEGREE microslots - the pairs the rule exists to warn about - resolved
+    to no host at all and were dropped.  The clause is therefore not transcribable in NX''s vocabulary,
+    and the divergence is recorded here rather than implemented.'
+  motivated_by:
+  - H12
+  - H18
+  label_en: Hole spacing
+  allowed_pairs:
+  - - STEP
+    - STEP
+  - - STEP
+    - HOLES
+  - - HOLES
+    - HOLES
+  page:
+    ab: HS
+    col: '#0077b6'
+    dir: undirected
+    gov: hole classes (STEP / HOLES) with each other
+    prop: axisSpacing (mm)
+    def: <b>Perpendicular offset between the axes</b> of two hole-like features.
+    when:
+    - the same set of NX attributes as COAXIAL
+    - the perpendicular distance between the two axes is taken
+    - a coaxial pair of holes does not hold
+- authority: pipeline
+  label: LOCATED_ON
+  derivedBy: nx_topology
+  node: 20'a
+  directed: false
+  definition_en: A semantic terminal of the source feature resolves outward to exactly one effective host face and
+    the feature owning it.
+  nx_basis: Needs an NX-side terminal resolver.  The open-source one is bound to v5.1 leaf semantics (the Countersink
+    cone section, the sectionFaceId / countersinkBoundaries diagnostics) and cannot be reused; what can be reused
+    is the purely topological layer under it - wall_rims and classify_rim_end take a PartModel and a face id and
+    nothing else.  Node 21' added a second proof beside it for the features that own no cylindrical wall.
+    Where a feature's own faces stop, the edges they share with faces outside the set form closed
+    components, and a component whose far side is not a cap is a way out.  Both proofs read nothing but
+    the PartModel.
+  nxNote: 'cnc:LOCATED_ON additionally states that Chamfer and Fillet transitions are never hosts, and are
+    stepped over on the way out.  NX declares no chamfer and no fillet class among the 87 reachable ones,
+    and no *FILLET* or *BLEND* field among the 399 attributes, so the clause has nothing to quantify over
+    here and is not transcribed.  A second difference is not a clause but a fact about the range: NX
+    registers a physical plane as several SURFACE_PLANAR features and merges no faces, so a terminal on
+    this line resolves to a smaller host than the same terminal does on the other one.'
+  motivated_by:
+  - H13
+  - H22
+  - H27
+  label_en: Located on
+  allowed_pairs:
+  - - STEP
+    - MachiningFeature
+  - - HOLES
+    - MachiningFeature
+  - - POCKETS
+    - MachiningFeature
+  - - BOSSES
+    - MachiningFeature
+  - - SLOTS
+    - MachiningFeature
+  - - CORNER_NOTCHES
+    - MachiningFeature
+  - - SIDE_NOTCHES
+    - MachiningFeature
+  - - GROOVES
+    - MachiningFeature
+  page:
+    ab: LO
+    col: '#e6a700'
+    dir: undirected in the graph, directed in the evidence
+    gov: source is a terminal-carrying pocket / hole / boss / slot / notch / groove; host is any final node
+    prop: terminals (hostSurfaceType / hostSurfaceNormal)
+    def: A semantic terminal of the source feature resolves outward and <b>lands on exactly one effective host face</b>, together with the feature that owns that face.
+    when:
+    - 'an NX-side terminal resolver is needed: the open-source one is tied to v5.1 leaf semantics (the conical section of a Countersink, diagnostic keys such as <code>sectionFaceId</code>) and <b>cannot be reused</b>'
+    - what can be reused is the purely topological layer beneath it, <code>wall_rims</code> / <code>classify_rim_end</code> - those two take only a PartModel and one face id
+    - the effective host of the terminal must be unique, or it does not hold
+- authority: pipeline
+  label: INTERSECTS
+  derivedBy: nx_topology
+  node: 20'a
+  directed: false
+  definition_en: Two hole-like features whose removal volumes meet; the property is the crossing angle.
+  nx_basis: PartModel topology plus the axes NX publishes.
+  nxNote: 'cnc:INTERSECTS looks only at each hole''s *principal* wall (for a compound hole, the base
+    cylinder); this side looks at every cylindrical wall the feature owns.  NX packs a whole ladder into
+    one node and states no order over its faces, so "the principal wall" has no NX-side referent - naming
+    one would mean inventing our own ordering rule.  A ladder whose upper section is broken into
+    therefore materialises an edge here and may not on the other line.'
+  motivated_by:
+  - H46
+  label_en: Intersects
+  allowed_pairs:
+  - - STEP
+    - STEP
+  - - STEP
+    - HOLES
+  - - HOLES
+    - HOLES
+  page:
+    ab: IX
+    col: '#d1495b'
+    dir: undirected
+    gov: hole classes (STEP / HOLES) with each other
+    prop: crossingAngle (degrees)
+    def: The <b>removal volumes of two hole-like features meet</b>; the relation property is their crossing angle.
+    when:
+    - the PartModel topology gives a shared edge between the principal walls of the two ends
+    - the two axes are not parallel
+- authority: pipeline
+  label: POCKET_CLEARANCE
+  derivedBy: nx_kernel
+  node: 20'b
+  directed: false
+  definition_en: Shortest remaining material distance between the walls of two pockets, materialised only
+    when the two wall sets are separated.
+  nx_basis: KernelServices measurement; not answerable from any attribute NX publishes.  Separation is
+    read from the same measurement - two wall sets that touch return zero, which is a contact and not a
+    clearance.
+  nxNote: 'cnc:POCKET_CLEARANCE additionally requires a shared LOCATED_ON host owner; this side does not,
+    for the reason given on HOLE_SPACING - host identity is not comparable across the two lines.'
+  motivated_by:
+  - H15
+  label_en: Pocket clearance
+  allowed_pairs:
+  - - POCKETS
+    - POCKETS
+  page:
+    ab: PC
+    col: '#7b2cbf'
+    dir: undirected
+    gov: the POCKETS family with itself
+    prop: pocketClearance (mm)
+    def: <b>Shortest remaining material distance</b> between the side walls of two pockets.
+    when:
+    - measured by <code>KernelServices</code>; no NX attribute can answer it
+    - 'the side wall face sets of the two ends are <b>disjoint</b>: a distance of 0 is contact rather than clearance, and produces no edge'
+    - it has to be measured in a session with the part open, which is why it belongs to 20'b
+- authority: pipeline
+  label: SLOT_CLEARANCE
+  derivedBy: nx_topology
+  node: 20'b
+  directed: false
+  definition_en: Shortest distance between the opening boundaries of two slots, materialised only when the
+    two boundaries are separated.
+  nx_basis: PartModel topology.  Each slot's opening boundary is the connected component of edges where
+    its own faces stop, which is the same boundary walk LOCATED_ON uses; the value is the shortest
+    distance between the two boundary polylines.  This is the basis cnc:SLOT_CLEARANCE measures on, and
+    unlike the whole owned face set it does not let a slot's floor stand in for its opening.
+  nxNote: 'cnc:SLOT_CLEARANCE additionally requires a shared LOCATED_ON host owner; this side does not,
+    for the reason given on HOLE_SPACING - host identity is not comparable across the two lines.'
+  motivated_by:
+  - H16
+  label_en: Slot clearance
+  allowed_pairs:
+  - - SLOTS
+    - SLOTS
+  page:
+    ab: SC
+    col: '#2a9d8f'
+    dir: undirected
+    gov: the SLOTS family with itself
+    prop: slotClearance (mm)
+    def: <b>Shortest distance between the opening boundaries</b> of two slots.
+    when:
+    - the opening boundary = the loop of edges where the owned faces stop (the same boundary walk as LOCATED_ON)
+    - the shortest distance between the two boundary polylines is taken - the same measurement basis as <code>cnc:SLOT_CLEARANCE</code>
+    - 'the two boundaries are <b>disjoint</b>: a distance of 0 is contact rather than clearance, and produces no edge'

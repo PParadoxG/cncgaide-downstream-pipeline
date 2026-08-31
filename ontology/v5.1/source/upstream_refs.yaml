@@ -1,0 +1,15 @@
+kpi_types:
+- kpi_collision_indicator
+- kpi_machining_time
+- kpi_rest_material_indicator
+- kpi_tool_changes
+- kpi_tool_wear_proxy
+- kpi_workpiece_stiffness
+reused_properties:
+- thresholdValue
+- validationStatus
+reused_annotation_properties:
+- domainIncludes
+- valueSpace
+- iso14649Correspondence
+- nxFeatureCode

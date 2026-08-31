@@ -1,0 +1,974 @@
+head:
+  note: One rule, two domains (node 19' D1). The 15 fields above applies_to are copied verbatim from ontology/v5.1/source/heuristics.yaml
+    and validate.py checks they stay equal; applies_to / condition are restated in NX's own class and attribute names. No
+    equivalence between an NX class and a v5.1 class is asserted anywhere.
+  notComparable: 'A rule kept here was kept because it is clear on NX''s own terms, not because it matches what the open-source
+    line computes. The same H yields two numbers that are not one metric, and no report may place them side by side as if
+    they were. What the two lines are compared on is the shape of each set: which rules survive, which are withdrawn, and
+    why.'
+  tiers:
+    A: NX gives it directly
+    B: pure arithmetic over NX attributes
+    C: an arithmetically derived edge
+    D: a topologically derived edge
+    E: a KernelServices measurement
+  counts:
+    evaluable: 28
+    noDomain: 7
+    withdrawn: 7
+    retired: 4
+heuristics:
+- id: H01
+  label_en: H01 — Hole depth-to-diameter ratio
+  grade: advisory
+  scope_en: single feature
+  statement_en: Keep the depth-to-diameter ratio of a hole at or below 4.
+  threshold_value: 4
+  threshold_note_en: t_hole_ld = 4
+  external_dependency_en: null
+  validation_status: candidate
+  source_reference: null
+  recommendation_text: null
+  validity_context_note: null
+  retired_reason_en: null
+  authority: pipeline
+  nxStatus: evaluable
+  nxTier: B
+  applies_to:
+  - STEP*
+  condition: 'forall sections k : sectionDepth(k) / DIAMETER_k <= t_hole_ld'
+  nxNote: one unit per ladder section. DEPTH_k is cumulative from the entry, so sectionDepth(k) = DEPTH_k - DEPTH_(k-1) with
+    DEPTH_(0) = 0; a through hole's last section runs from DEPTH_(n-1) to DEPTH. NX publishes the whole sequence, so a per-section
+    ratio needs no re-cut of the solid
+- id: H02
+  label_en: H02 — Standard drill-point blind-hole bottom
+  grade: informational
+  scope_en: single feature
+  statement_en: Use a standard 118-degree or 135-degree conical drill-point bottom for a blind hole.
+  threshold_value: null
+  threshold_note_en: Controlled set, no numeric threshold
+  external_dependency_en: null
+  validation_status: candidate
+  source_reference: null
+  recommendation_text: null
+  validity_context_note: null
+  retired_reason_en: null
+  authority: pipeline
+  nxStatus: noDomain
+  nxGapKind: attribute
+  nxNote: NX never publishes a hole's bottom cone angle. ANGLE_BOTTOM_k is the shoulder between sections k and k+1 - exactly
+    n-1 of them per STEPn class - and STEP1HOLE / STEP1POCKET have none at all. The only classes carrying TIP_ANGLE sit on
+    the IdentifiedFeature branch, which one Parametric pass does not produce.
+  applies_to: []
+  condition: null
+- id: H03
+  label_en: H03 — Pocket depth-to-width ratio
+  grade: advisory
+  scope_en: single feature
+  statement_en: Keep the depth of a rectangular pocket at or below five times its most restrictive width.
+  threshold_value: 5
+  threshold_note_en: t_pocket_ld = 5
+  external_dependency_en: null
+  validation_status: candidate
+  source_reference: null
+  recommendation_text: null
+  validity_context_note: null
+  retired_reason_en: null
+  authority: pipeline
+  nxStatus: evaluable
+  nxTier: B
+  applies_to:
+  - POCKET_RECTANGULAR_STRAIGHT
+  condition: DEPTH / min(WIDTH, LENGTH) <= t_pocket_ld
+  nxNote: the only one of the seven POCKET_* classes that declares WIDTH, and it declares LENGTH too, so the restrictive station
+    is the smaller of the two
+- id: H04
+  label_en: H04 — Open pocket preference
+  grade: —
+  scope_en: single feature
+  statement_en: Prefer an open pocket whose opening boundary reaches the exterior part boundary so that axial tool entry can
+    be avoided where feasible.
+  threshold_value: null
+  threshold_note_en: —
+  external_dependency_en: null
+  validation_status: candidate
+  source_reference: null
+  recommendation_text: null
+  validity_context_note: null
+  retired_reason_en: The open pocket is not in the class space this ontology froze. The Pocket family's criterion is a closed principal wall band, so the rule has no object inside the ontology it can decide.
+  authority: pipeline
+  nxStatus: retired
+- id: H05
+  label_en: H05 — Minimum fillet radius
+  grade: advisory
+  scope_en: single feature
+  statement_en: Use a fillet radius of at least 0.5 mm so that a standard edge-rounding tool can be used.
+  threshold_value: 0.5
+  threshold_note_en: t_fillet_radius = 0.5 mm
+  external_dependency_en: null
+  validation_status: candidate
+  source_reference: null
+  recommendation_text: null
+  validity_context_note: null
+  retired_reason_en: null
+  authority: pipeline
+  nxStatus: noDomain
+  nxGapKind: domain
+  nxNote: No fillet class among the 87, and no *FILLET* or *BLEND* field anywhere in the 399 - both searches return zero.
+  applies_to: []
+  condition: null
+- id: H06
+  label_en: H06 — Minimum circular-boss diameter
+  grade: advisory
+  scope_en: single feature
+  statement_en: Keep the smaller of the base and top diameters of a circular boss at or above 3 mm.
+  threshold_value: 3.0
+  threshold_note_en: t_boss_diameter = 3.0 mm
+  external_dependency_en: null
+  validation_status: candidate
+  source_reference: null
+  recommendation_text: null
+  validity_context_note: null
+  retired_reason_en: null
+  authority: pipeline
+  nxStatus: evaluable
+  nxTier: A
+  applies_to:
+  - BOSS_ROUND_STRAIGHT
+  - BOSS_ROUND_STRAIGHT_THREAD
+  condition: DIAMETER >= t_boss_diameter
+  nxNote: NX publishes one DIAMETER; there is no base/top pair on this side. The English statement copied from v5.1 names
+    that pair, which is why statement and condition read differently here
+- id: H07
+  label_en: H07 — Circular-boss height-to-diameter ratio
+  grade: advisory
+  scope_en: single feature
+  statement_en: Keep the height of a circular boss at or below four times the smaller of its base and top diameters.
+  threshold_value: 4
+  threshold_note_en: t_boss_hd = 4
+  external_dependency_en: null
+  validation_status: candidate
+  source_reference: null
+  recommendation_text: null
+  validity_context_note: null
+  retired_reason_en: null
+  authority: pipeline
+  nxStatus: evaluable
+  nxTier: B
+  applies_to:
+  - BOSS_ROUND_STRAIGHT
+  - BOSS_ROUND_STRAIGHT_THREAD
+  condition: DEPTH <= t_boss_hd * DIAMETER
+  nxNote: as in H06, NX publishes one DIAMETER for a round boss and no base/top pair, so the English
+    statement copied from v5.1 names a pair the condition cannot read
+- id: H08
+  label_en: H08 — Available drill diameter
+  grade: advisory
+  scope_en: single feature
+  statement_en: Choose a hole diameter for which a matching drill (within 0.05 mm) exists in the target machine's magazine.
+  threshold_value: null
+  threshold_note_en: tol_diameter = 0.05 mm
+  external_dependency_en: tool magazine
+  validation_status: candidate
+  source_reference: null
+  recommendation_text: null
+  validity_context_note: null
+  retired_reason_en: null
+  authority: pipeline
+  nxStatus: withdrawn
+  nxWithdrawnMechanism: quantityOwnership
+  nxNote: 'The rule asks whether a drill of this diameter exists. On a ladder there is no one diameter that answers it: the
+    entry section is bored or milled, not drilled, and the HOLE_ROUND_* classes originally in the domain are milled through-cavities.
+    Reading the entry asks the question of the wrong section, and HOLE_ROUND_INTERRUPTED_STRAIGHT does not even declare DIAMETER_1.'
+  applies_to: []
+  condition: null
+- id: H09
+  label_en: H09 — Uniform hole axis orientation
+  grade: advisory
+  scope_en: part-level aggregate
+  statement_en: 'Orient all holes of a part along one axis direction (distinct feature_axis directions within 0.5 degree:
+    at most 1).'
+  threshold_value: 1
+  threshold_note_en: t_hole_axis_variety = 1; tol_axis = 0.5°
+  external_dependency_en: null
+  validation_status: candidate
+  source_reference: null
+  recommendation_text: null
+  validity_context_note: null
+  retired_reason_en: null
+  authority: pipeline
+  nxStatus: evaluable
+  nxTier: A
+  applies_to:
+  - STEP*
+  condition: distinct((X_ORIENTATION_D, Y_ORIENTATION_D, Z_ORIENTATION_D) over STEP* in part, tol_axis) <= t_hole_axis_variety
+  nxNote: 'STEP* is NX''s drilled-hole family. The HOLES family is excluded: all six of its display names end in ''Through''
+    and they are milled through-cavities, not drilled holes'
+- id: H10
+  label_en: H10 — Minimum pocket corner radius
+  grade: hard
+  scope_en: single feature
+  statement_en: Use a minimum concave internal corner radius of at least 1 mm in a pocket.
+  threshold_value: 1.0
+  threshold_note_en: t_corner_radius = 1.0 mm
+  external_dependency_en: null
+  validation_status: candidate
+  source_reference: null
+  recommendation_text: null
+  validity_context_note: null
+  retired_reason_en: null
+  authority: pipeline
+  nxStatus: evaluable
+  nxTier: A
+  applies_to:
+  - POCKET_CLOSED
+  - POCKET_OPEN
+  - POCKET_FREE_SHAPED_STRAIGHT
+  condition: MIN_RADIUS >= t_corner_radius
+  nxNote: only five of the 84 classes declare MIN_RADIUS. HOLE_FREE_SHAPED_STRAIGHT is a through-cavity and belongs to H43
+    at its own threshold; WEDM_FREE_SHAPED_STRAIGHT is wire-cut, where the corner radius follows the wire, not a cutter
+- id: H11
+  label_en: H11 — Minimum remaining pocket floor thickness
+  grade: hard
+  scope_en: single feature
+  statement_en: Keep the remaining floor thickness below a pocket at or above 2 mm.
+  threshold_value: 2.0
+  threshold_note_en: t_floor = 2.0 mm
+  external_dependency_en: null
+  validation_status: candidate
+  source_reference: null
+  recommendation_text: null
+  validity_context_note: null
+  retired_reason_en: null
+  authority: pipeline
+  nxStatus: evaluable
+  nxTier: E
+  applies_to:
+  - POCKET_*
+  condition: derived_floor_thickness >= t_floor
+- id: H12
+  label_en: H12 — Minimum web between holes
+  grade: hard
+  scope_en: feature pair
+  statement_en: Keep the material web between two same-host parallel holes (axis spacing minus the mean of both diameters)
+    at or above 2 mm.
+  threshold_value: 2.0
+  threshold_note_en: t_hole_web = 2.0 mm
+  external_dependency_en: null
+  validation_status: candidate
+  source_reference: null
+  recommendation_text: null
+  validity_context_note: null
+  retired_reason_en: null
+  authority: pipeline
+  nxStatus: evaluable
+  nxTier: C
+  applies_to:
+  - STEP*
+  condition: HOLE_SPACING(A,B).axisSpacing - (DIAMETER_1(A) + DIAMETER_1(B)) / 2 >= t_hole_web
+  nxNote: DIAMETER_1 is the entry and, because a ladder runs monotonically inward, the widest section, so this measures the
+    web at the mouths - the thinnest reading of the pair
+- id: H13
+  label_en: H13 — Hole coaxial with its boss
+  grade: informational
+  scope_en: single feature (conditional)
+  statement_en: If a hole is located on a circular boss, at least one hole located on that boss shall be coaxial with it.
+  threshold_value: null
+  threshold_note_en: —
+  external_dependency_en: null
+  validation_status: candidate
+  source_reference: null
+  recommendation_text: null
+  validity_context_note: null
+  retired_reason_en: null
+  authority: pipeline
+  nxStatus: evaluable
+  nxTier: D
+  applies_to:
+  - BOSS_ROUND_STRAIGHT
+  - BOSS_ROUND_STRAIGHT_THREAD
+  condition: '(exists h in STEP* union HOLES : LOCATED_ON(h, B)) -> (exists h'' in STEP* union HOLES :
+    LOCATED_ON(h'', B) and COAXIAL(h'', B))'
+- id: H14
+  label_en: H14 — Boss without undercut
+  grade: —
+  scope_en: single feature
+  statement_en: Avoid undercut geometry on a boss because it requires special tooling and reduces tool accessibility.
+  threshold_value: null
+  threshold_note_en: —
+  external_dependency_en: null
+  validation_status: candidate
+  source_reference: null
+  recommendation_text: null
+  validity_context_note: null
+  retired_reason_en: Undercut and accessibility judgements are not something this pipeline produces, so the rule has no operand it can name inside the ontology.
+  authority: pipeline
+  nxStatus: retired
+- id: H15
+  label_en: H15 — Minimum pocket-to-pocket clearance
+  grade: hard
+  scope_en: feature pair
+  statement_en: Keep at least 3 mm of side-wall clearance between two same-host pockets.
+  threshold_value: 3.0
+  threshold_note_en: t_pocket_gap = 3.0 mm
+  external_dependency_en: null
+  validation_status: candidate
+  source_reference: null
+  recommendation_text: null
+  validity_context_note: null
+  retired_reason_en: null
+  authority: pipeline
+  nxStatus: evaluable
+  nxTier: E
+  applies_to:
+  - POCKET_*
+  condition: POCKET_CLEARANCE(A,B).pocketClearance >= t_pocket_gap
+- id: H16
+  label_en: H16 — Minimum slot-to-slot clearance
+  grade: hard
+  scope_en: feature pair
+  statement_en: Keep at least 3 mm of opening clearance between two same-host slots.
+  threshold_value: 3.0
+  threshold_note_en: t_slot_gap = 3.0 mm
+  external_dependency_en: null
+  validation_status: candidate
+  source_reference: null
+  recommendation_text: null
+  validity_context_note: null
+  retired_reason_en: null
+  authority: pipeline
+  nxStatus: evaluable
+  nxTier: E
+  applies_to:
+  - SLOT_*
+  condition: SLOT_CLEARANCE(A,B).slotClearance >= t_slot_gap
+- id: H17
+  label_en: H17 — Minimum slot width
+  grade: hard
+  scope_en: single feature
+  statement_en: Keep the smaller of the opening and bottom widths of a rectangular slot at or above 3 mm.
+  threshold_value: 3.0
+  threshold_note_en: t_slot_width = 3.0 mm
+  external_dependency_en: null
+  validation_status: candidate
+  source_reference: null
+  recommendation_text: null
+  validity_context_note: null
+  retired_reason_en: null
+  authority: pipeline
+  nxStatus: evaluable
+  nxTier: A
+  applies_to: &id001
+  - SLOT_90_DEGREE
+  - SLOT_OBROUND
+  - SLOT_PARTIAL_OBROUND
+  - SLOT_PARTIAL_RECTANGULAR
+  - SLOT_PARTIAL_ROUND
+  - SLOT_PARTIAL_U_SHAPED
+  - SLOT_RECTANGULAR
+  - SLOT_UPSIDE_DOWN_DOVE_TAIL
+  - SLOT_V_SHAPED
+  condition: WIDTH >= t_slot_width
+  nxNote: the nine SLOT_* that declare a plain WIDTH, where WIDTH is the width at the opening. SLOT_ROUND and SLOT_U_SHAPED
+    publish no width at all; SLOT_DOVE_TAIL and SLOT_T_SHAPED publish WIDTH_1 and WIDTH_2 without saying which is which
+- id: H18
+  label_en: H18 — Common base-hole diameter for nearby holes
+  grade: advisory
+  scope_en: feature pair
+  statement_en: Holes whose axis spacing is at most three times the larger diameter shall share one base-hole diameter (within
+    0.05 mm).
+  threshold_value: null
+  threshold_note_en: t_hole_near = 3; tol_diameter = 0.05 mm
+  external_dependency_en: null
+  validation_status: candidate
+  source_reference: null
+  recommendation_text: null
+  validity_context_note: null
+  retired_reason_en: null
+  authority: pipeline
+  nxStatus: evaluable
+  nxTier: C
+  applies_to:
+  - STEP*
+  condition: HOLE_SPACING(A,B).axisSpacing <= t_hole_near * max(DIAMETER_n(A), DIAMETER_n(B)) -> |DIAMETER_n(A) - DIAMETER_n(B)|
+    <= tol_diameter
+  nxNote: the base hole is the last section, so this reads DIAMETER_n and not the entry
+- id: H19
+  label_en: H19 — Pocket corner-radius-to-depth ratio
+  grade: advisory
+  scope_en: single feature
+  statement_en: Keep the minimum concave internal corner radius of a pocket at least one third of its depth.
+  threshold_value: 0.33
+  threshold_note_en: t_corner_depth_ratio = 0.33
+  external_dependency_en: null
+  validation_status: candidate
+  source_reference: null
+  recommendation_text: null
+  validity_context_note: null
+  retired_reason_en: null
+  authority: pipeline
+  nxStatus: evaluable
+  nxTier: B
+  applies_to:
+  - POCKET_CLOSED
+  - POCKET_OPEN
+  - POCKET_FREE_SHAPED_STRAIGHT
+  condition: MIN_RADIUS / DEPTH >= t_corner_depth_ratio
+- id: H20
+  label_en: H20 — Flat pocket bottom
+  grade: informational
+  scope_en: single feature
+  statement_en: Prefer a pocket whose floor is flat.
+  threshold_value: null
+  threshold_note_en: Controlled set, no numeric threshold
+  external_dependency_en: null
+  validation_status: candidate
+  source_reference: null
+  recommendation_text: null
+  validity_context_note: null
+  retired_reason_en: null
+  authority: pipeline
+  nxStatus: noDomain
+  nxGapKind: attribute
+  nxNote: No controlled vocabulary for the floor condition and no equivalent scalar. The nearest notion, TILTED_BOTTOM_DEPTH,
+    is declared on 30 hole classes and on no pocket class.
+  applies_to: []
+  condition: null
+- id: H21
+  label_en: H21 — Vertical walls
+  grade: advisory
+  scope_en: single feature
+  statement_en: Keep the maximum wall draft angle at or below 0.5 degree (for CircularBoss the derived wall draft angle).
+  threshold_value: null
+  threshold_note_en: tol_draft_zero = 0.5°
+  external_dependency_en: null
+  validation_status: candidate
+  source_reference: null
+  recommendation_text: null
+  validity_context_note: null
+  retired_reason_en: null
+  authority: pipeline
+  nxStatus: evaluable
+  nxTier: A
+  applies_to:
+  - POCKET_CLOSED
+  - POCKET_OPEN
+  condition: 90 - MIN_SIDE_ANGLE <= tol_draft_zero
+  nxNote: 'semantic restatement: NX measures wall-to-floor angle, 90 deg = vertical; not a draft angle.
+    The domain is two classes rather than v5.1''s seven because POCKET_CLOSED and POCKET_OPEN are the only
+    two of the 84 reachable classes that declare MIN_SIDE_ANGLE - NX states no wall angle for a slot, a
+    boss or a through cavity'
+- id: H22
+  label_en: H22 — Entry blind hole for a deep pocket
+  grade: advisory
+  scope_en: single feature (conditional)
+  statement_en: A pocket at least 10 mm deep shall have a blind hole located on it as a plunge entry.
+  threshold_value: 10
+  threshold_note_en: t_pocket_entry_depth = 10 mm
+  external_dependency_en: null
+  validation_status: candidate
+  source_reference: null
+  recommendation_text: null
+  validity_context_note: null
+  retired_reason_en: null
+  authority: pipeline
+  nxStatus: evaluable
+  nxTier: D
+  applies_to:
+  - POCKET_*
+  condition: 'DEPTH >= t_pocket_entry_depth -> exists h in STEP*POCKET : LOCATED_ON(h, P)'
+- id: H23
+  label_en: H23 — Slot depth-to-width ratio
+  grade: advisory
+  scope_en: single feature
+  statement_en: Keep the depth of a slot at or below four times its most restrictive width.
+  threshold_value: 4
+  threshold_note_en: t_slot_ld = 4
+  external_dependency_en: null
+  validation_status: candidate
+  source_reference: null
+  recommendation_text: null
+  validity_context_note: null
+  retired_reason_en: null
+  authority: pipeline
+  nxStatus: evaluable
+  nxTier: B
+  applies_to: *id001
+  condition: DEPTH / WIDTH <= t_slot_ld
+  nxNote: same nine classes as H17. On SLOT_90_DEGREE the ratio is fixed at 0.5 by the 90-degree section itself, so the rule
+    is met by construction there
+- id: H26
+  label_en: H26 — Uniform compound-hole operation geometry
+  grade: advisory
+  scope_en: part-level aggregate (grouped)
+  statement_en: 'Within a same-host group of one compound-hole leaf class, use one operation geometry: equal counterbore diameter
+    and depth (within 0.05 mm) for counterbores, or equal countersink diameter (within 0.05 mm) and included angle (within
+    1 degree) for countersinks.'
+  threshold_value: null
+  threshold_note_en: tol_dim = 0.05 mm; tol_angle = 1.0°
+  external_dependency_en: null
+  validation_status: candidate
+  source_reference: null
+  recommendation_text: null
+  validity_context_note: null
+  retired_reason_en: null
+  authority: pipeline
+  nxStatus: withdrawn
+  nxWithdrawnMechanism: entryHostAbsorbed
+  nxNote: Grouping is by (host owner, class). On the open-source line D-7 merges a 2-section chain into one Counterbore whose
+    single entry lands on an outer face, which is what makes the grouping meaningful there. NX packs every ladder length into
+    one node, so the grouping would run over classes the open-source rule never covers, on a host the NX line does not yet
+    resolve, comparing a first section chosen for no reason other than that v5.1 had exactly two.
+  applies_to: []
+  condition: null
+- id: H27
+  label_en: H27 — Normal hole entry
+  grade: hard
+  scope_en: feature pair
+  statement_en: Every LOCATED_ON terminal of a hole shall rest on a planar host face whose normal is parallel to the hole
+    axis within 1 degree.
+  threshold_value: null
+  threshold_note_en: t_normal_entry = 1.0°
+  external_dependency_en: null
+  validation_status: candidate
+  source_reference: null
+  recommendation_text: null
+  validity_context_note: null
+  retired_reason_en: null
+  authority: pipeline
+  nxStatus: evaluable
+  nxTier: D
+  applies_to:
+  - STEP*
+  condition: 'forall t in LOCATED_ON(hole, *).terminals : t.hostSurfaceType == PLANE and angle((X_ORIENTATION_D, Y_ORIENTATION_D,
+    Z_ORIENTATION_D), t.hostSurfaceNormal) <= t_normal_entry'
+- id: H28
+  label_en: H28 — Minimum blind-hole floor thickness
+  grade: hard
+  scope_en: single feature
+  statement_en: Keep at least 2 mm of remaining material below a blind-hole bottom.
+  threshold_value: 2.0
+  threshold_note_en: t_floor = 2.0 mm
+  external_dependency_en: null
+  validation_status: candidate
+  source_reference: null
+  recommendation_text: null
+  validity_context_note: null
+  retired_reason_en: null
+  authority: pipeline
+  nxStatus: evaluable
+  nxTier: E
+  applies_to:
+  - STEP*POCKET
+  condition: derived_floor_thickness >= t_floor
+- id: H30
+  label_en: H30 — Monotonic diameter along a coaxial hole chain
+  grade: advisory
+  scope_en: feature pair (chain)
+  statement_en: Along a chain of coaxial, directly adjacent holes with a single non-hole entry and consistent machining directions,
+    the diameter shall not increase when traversed from the entry.
+  threshold_value: null
+  threshold_note_en: —
+  external_dependency_en: null
+  validation_status: candidate
+  source_reference: null
+  recommendation_text: null
+  validity_context_note: Counterbore comparison is directly evaluable from final feature geometry. The multi-feature case
+    additionally requires a coaxial relation and an externally supplied order from entry toward increasing depth; this ontology
+    does not invent an axial-order property.
+  retired_reason_en: null
+  authority: pipeline
+  nxStatus: withdrawn
+  nxWithdrawnMechanism: absorbedByRecogniser
+  nxNote: 'NX segments a ladder by diameter itself, so a single-sided ladder is monotonic by construction and the rule checks
+    the recogniser rather than the part. The classes that are not monotonic are the two-sided ones, where non-monotonicity
+    is the class definition: STEP3HOLE1 measures 80 / 36 / 80 in the frozen corpus, and the trailing 1 or 2 in the name means
+    machined from both sides.'
+  applies_to: []
+  condition: null
+- id: H34
+  label_en: H34 — Limit distinct fillet radii
+  grade: advisory
+  scope_en: part-level aggregate
+  statement_en: Limit a part to at most two distinct fillet radii (within 0.05 mm).
+  threshold_value: 2
+  threshold_note_en: t_fillet_variety = 2; tol_fillet_radius = 0.05 mm
+  external_dependency_en: null
+  validation_status: candidate
+  source_reference: null
+  recommendation_text: null
+  validity_context_note: null
+  retired_reason_en: null
+  authority: pipeline
+  nxStatus: noDomain
+  nxGapKind: domain
+  nxNote: Same as H05.
+  applies_to: []
+  condition: null
+- id: H35
+  label_en: H35 — Uniform chamfer angle
+  grade: advisory
+  scope_en: part-level aggregate
+  statement_en: 'Use one chamfer angle throughout a part (distinct min_chamfer_angle values within 0.5 degree: at most 1).'
+  threshold_value: 1
+  threshold_note_en: t_chamfer_variety = 1; tol_chamfer_angle = 0.5°
+  external_dependency_en: null
+  validation_status: candidate
+  source_reference: null
+  recommendation_text: null
+  validity_context_note: null
+  retired_reason_en: null
+  authority: pipeline
+  nxStatus: withdrawn
+  nxWithdrawnMechanism: notAnEntity
+  nxNote: A chamfer is not a feature on this side but a slot on a hole, so 'how many distinct chamfer angles has this part'
+    has no unit to count. Of the chamfer-angle slots across the 21 observed classes only four are ever non-zero, and a zero
+    cannot be told apart from an unused slot (node 18b). The non-zero readings include 63.43 degrees, which is atan(2) - the
+    by-product of a 1:2 cone, not any tool's angle.
+  applies_to: []
+  condition: null
+- id: H36
+  label_en: H36 — Edge-treatment tool availability
+  grade: advisory
+  scope_en: single feature
+  statement_en: Choose chamfer angle and width, or fillet radius, to match an edge tool available in the target machine magazine.
+  threshold_value: null
+  threshold_note_en: tol_chamfer_angle = 0.5°; tol_fillet_radius = 0.05 mm
+  external_dependency_en: tool magazine
+  validation_status: candidate
+  source_reference: null
+  recommendation_text: null
+  validity_context_note: null
+  retired_reason_en: null
+  authority: pipeline
+  nxStatus: withdrawn
+  nxWithdrawnMechanism: notAnEntity
+  nxNote: 'Same unit problem as H35, and only the chamfer half survives at all: node 19'' D3 settled that no fillet node may
+    be manufactured out of a per-face NX call.'
+  applies_to: []
+  condition: null
+- id: H37
+  label_en: H37 — Minimum clearance around a boss
+  grade: hard
+  scope_en: single feature
+  statement_en: Keep at least 3 mm of free space around a boss.
+  threshold_value: 3.0
+  threshold_note_en: t_boss_clearance = 3.0 mm
+  external_dependency_en: null
+  validation_status: candidate
+  source_reference: null
+  recommendation_text: null
+  validity_context_note: null
+  retired_reason_en: null
+  authority: pipeline
+  nxStatus: evaluable
+  nxTier: E
+  applies_to:
+  - BOSS_*
+  condition: derived_min_clearance >= t_boss_clearance
+- id: H38
+  label_en: H38 — Rectangular-boss slenderness ratio
+  grade: advisory
+  scope_en: single feature
+  statement_en: Keep the height-to-minimum-thickness ratio of a rectangular boss at or below 10.
+  threshold_value: 10
+  threshold_note_en: t_boss_slenderness = 10
+  external_dependency_en: null
+  validation_status: candidate
+  source_reference: null
+  recommendation_text: null
+  validity_context_note: null
+  retired_reason_en: null
+  authority: pipeline
+  nxStatus: evaluable
+  nxTier: B
+  applies_to:
+  - BOSS_RECTANGULAR_STRAIGHT
+  condition: DEPTH / min(WIDTH, LENGTH) <= t_boss_slenderness
+- id: H39
+  label_en: H39 — Coplanar related planar faces
+  grade: —
+  scope_en: feature pair
+  statement_en: Place related planar faces at the same level where possible so that they can be machined in one face-milling
+    pass.
+  threshold_value: null
+  threshold_note_en: —
+  external_dependency_en: null
+  validation_status: candidate
+  source_reference: null
+  recommendation_text: null
+  validity_context_note: null
+  retired_reason_en: Grouping into machining areas is not something this pipeline produces, and coplanarity does not stand for identity of machining area, so COPLANAR is not materialised in the ontology and the rule has no carrier it can name.
+  authority: pipeline
+  nxStatus: retired
+- id: H41
+  label_en: H41 — Minimum internal corner angle
+  grade: hard
+  scope_en: single feature
+  statement_en: Keep the minimum concave internal corner angle of a pocket or through cut at or above 90 degrees.
+  threshold_value: 90
+  threshold_note_en: t_corner_angle = 90°
+  external_dependency_en: null
+  validation_status: candidate
+  source_reference: null
+  recommendation_text: null
+  validity_context_note: null
+  retired_reason_en: null
+  authority: pipeline
+  nxStatus: noDomain
+  nxGapKind: attribute
+  nxNote: NX publishes MIN_RADIUS, a radius; there is no internal-corner angle.
+  applies_to: []
+  condition: null
+- id: H42
+  label_en: H42 — Use freeform faces only when required
+  grade: informational
+  scope_en: single feature
+  statement_en: Use a freeform face only when it is required by the part function.
+  threshold_value: null
+  threshold_note_en: —
+  external_dependency_en: design intent
+  validation_status: candidate
+  source_reference: null
+  recommendation_text: null
+  validity_context_note: null
+  retired_reason_en: null
+  authority: pipeline
+  nxStatus: noDomain
+  nxGapKind: domain
+  nxNote: NX registers no feature for a freeform face - the 18 FreeformFace nodes are the one place the open-source line has
+    more than NX, not fewer. Needs an external input besides.
+  applies_to: []
+  condition: null
+- id: H43
+  label_en: H43 — Minimum through-cut corner radius
+  grade: hard
+  scope_en: single feature
+  statement_en: Keep the minimum concave internal corner radius of a through cut at or above 3 mm.
+  threshold_value: 3.0
+  threshold_note_en: t_throughcut_corner_radius = 3.0 mm
+  external_dependency_en: null
+  validation_status: candidate
+  source_reference: null
+  recommendation_text: null
+  validity_context_note: null
+  retired_reason_en: null
+  authority: pipeline
+  nxStatus: evaluable
+  nxTier: A
+  applies_to:
+  - HOLE_FREE_SHAPED_STRAIGHT
+  condition: MIN_RADIUS >= t_throughcut_corner_radius
+  nxNote: 'D2: the through/blind split is NX''s own - all six HOLES display names end in ''Through'' and none of the seven
+    POCKETS ones do'
+- id: H45
+  label_en: H45 — Tool length-to-diameter capability
+  grade: hard
+  scope_en: single feature
+  statement_en: Keep the hole depth-to-diameter ratio within the maximum L/D reachable by the available tools.
+  threshold_value: null
+  threshold_note_en: —
+  external_dependency_en: tool magazine
+  validation_status: candidate
+  source_reference: null
+  recommendation_text: null
+  validity_context_note: null
+  retired_reason_en: null
+  authority: pipeline
+  nxStatus: evaluable
+  nxTier: B
+  applies_to:
+  - STEP*POCKET
+  condition: 'forall sections k : sectionDepth(k) / DIAMETER_k <= tool_magazine(machine).max_length_to_diameter'
+  nxNote: per section, as in H01
+- id: H46
+  label_en: H46 — Minimum intersecting-hole angle
+  grade: hard
+  scope_en: feature pair
+  statement_en: Keep the crossing angle between two intersecting holes at or above 45 degrees.
+  threshold_value: 45
+  threshold_note_en: t_crossing_angle = 45°
+  external_dependency_en: null
+  validation_status: candidate
+  source_reference: null
+  recommendation_text: null
+  validity_context_note: null
+  retired_reason_en: null
+  authority: pipeline
+  nxStatus: evaluable
+  nxTier: D
+  applies_to:
+  - STEP*
+  condition: INTERSECTS(A,B).crossingAngle >= t_crossing_angle
+- id: H47
+  label_en: H47 — Cavity without undercut
+  grade: —
+  scope_en: single feature
+  statement_en: Avoid undercut geometry in pockets and slots because it requires a dedicated T-slot, disk, or other special
+    cutter and a separate operation.
+  threshold_value: null
+  threshold_note_en: —
+  external_dependency_en: null
+  validation_status: candidate
+  source_reference: null
+  recommendation_text: null
+  validity_context_note: null
+  retired_reason_en: Undercut and accessibility judgements are not something this pipeline produces, so the rule has no operand it can name inside the ontology.
+  authority: pipeline
+  nxStatus: retired
+- id: H48
+  label_en: H48 — Limit tool-axis orientations
+  grade: advisory
+  scope_en: part-level aggregate
+  statement_en: Limit the axis-bearing features of a part to at most two distinct feature_axis directions (within 0.5 degree).
+  threshold_value: 2
+  threshold_note_en: t_axis_variety = 2; tol_axis = 0.5°
+  external_dependency_en: null
+  validation_status: candidate
+  source_reference: null
+  recommendation_text: null
+  validity_context_note: null
+  retired_reason_en: null
+  authority: pipeline
+  nxStatus: withdrawn
+  nxWithdrawnMechanism: featureSetNotTrusted
+  nxNote: 'Counting distinct tool axes requires the feature set itself to be trustworthy. NX''s is not, for this purpose:
+    CORNER_NOTCH_STRAIGHT alone contributes nine distinct X orientations over 27 instances, so every part fails, and every
+    failure comes from the class node 18'' already judged to be right-angle noise between large planes. Excluding it would
+    mean we, not NX, decide what counts as a machining feature.'
+  applies_to: []
+  condition: null
+- id: H49
+  label_en: H49 — Limit distinct hole diameters
+  grade: advisory
+  scope_en: part-level aggregate
+  statement_en: Limit a part to at most five distinct through- and blind-hole diameters (within 0.05 mm).
+  threshold_value: 5
+  threshold_note_en: t_diameter_variety = 5; tol_diameter = 0.05 mm
+  external_dependency_en: null
+  validation_status: candidate
+  source_reference: null
+  recommendation_text: null
+  validity_context_note: null
+  retired_reason_en: null
+  authority: pipeline
+  nxStatus: evaluable
+  nxTier: A
+  applies_to:
+  - STEP*
+  condition: distinct(DIAMETER_1 .. DIAMETER_n over STEP* in part, tol_diameter) <= t_diameter_variety
+  nxNote: every section needs its own cutter, so the count runs over the whole sequence and not the entry alone. A six-section
+    ladder therefore contributes six diameters by itself - which is what it costs
+- id: H50
+  label_en: H50 — Feature extent within usable tool length
+  grade: hard
+  scope_en: single feature
+  statement_en: Keep blind-hole, slot and pocket depth, and the maximum face extent of a step, within the usable cutting length
+    of a standard tool.
+  threshold_value: null
+  threshold_note_en: —
+  external_dependency_en: tool magazine
+  validation_status: candidate
+  source_reference: null
+  recommendation_text: null
+  validity_context_note: null
+  retired_reason_en: null
+  authority: pipeline
+  nxStatus: evaluable
+  nxTier: A
+  applies_to:
+  - STEP*
+  - SLOT_*
+  - POCKET_*
+  condition: DEPTH <= tool_magazine(machine).max_usable_length
+  nxNote: only the depth half; max_face_extent belongs to the Step domain, which NX does not have
+- id: H51
+  label_en: H51 — Minimum remaining wall thickness around a feature
+  grade: hard
+  scope_en: single feature
+  statement_en: Keep the remaining wall thickness around a removal feature at or above 1 mm.
+  threshold_value: 1.0
+  threshold_note_en: t_min_wall = 1.0 mm
+  external_dependency_en: null
+  validation_status: candidate
+  source_reference: null
+  recommendation_text: null
+  validity_context_note: null
+  retired_reason_en: null
+  authority: pipeline
+  nxStatus: evaluable
+  nxTier: E
+  applies_to:
+  - STEP*
+  - SLOT_*
+  - POCKET_*
+  - HOLE_*
+  condition: derived_min_wall_thickness >= t_min_wall
+  nxNote: the HOLES family belongs here for the same reason H43 has it - NX's six HOLE_* classes are the
+    milled through-cavities, and a wall left beside one is as thin as a wall left beside a pocket. The
+    quantity is ours (nxd:derived_min_wall_thickness), so nothing in NX's vocabulary excluded them; node
+    19' simply did not carry v5.1's ThroughCut across and node 21' put it back
+- id: H52
+  label_en: H52 — Standard countersink angle
+  grade: advisory
+  scope_en: single feature
+  statement_en: Use a standard countersink included angle of 60, 90 or 120 degrees (within 1 degree, DIN 335).
+  threshold_value: null
+  threshold_note_en: T_countersink_angles = {60, 90, 120} (DIN 335); tol_angle = 1.0°
+  external_dependency_en: null
+  validation_status: candidate
+  source_reference: null
+  recommendation_text: null
+  validity_context_note: null
+  retired_reason_en: null
+  authority: pipeline
+  nxStatus: withdrawn
+  nxWithdrawnMechanism: vocabularyTooCoarse
+  nxNote: NX has no countersink notion; ANGLE_TOP_CHAMFER carries the deburring chamfer, the countersink and the inter-section
+    cone alike. The non-zero readings in the frozen corpus are 45, 63.43, 61.93 and 41.99 degrees - not one of them in {60,
+    90, 120} - so the rule would mark every ordinary 45-degree deburring chamfer as not met.
+  applies_to: []
+  condition: null
+- id: H53
+  label_en: H53 — Standard V-slot tool angle
+  grade: advisory
+  scope_en: single feature
+  statement_en: Use a standard V-slot included angle of 30, 45, 60, 90 or 120 degrees (within 1 degree).
+  threshold_value: null
+  threshold_note_en: T_v_tool_angles = {30, 45, 60, 90, 120}; tol_angle = 1.0°
+  external_dependency_en: null
+  validation_status: candidate
+  source_reference: null
+  recommendation_text: null
+  validity_context_note: null
+  retired_reason_en: null
+  authority: pipeline
+  nxStatus: evaluable
+  nxTier: A
+  applies_to:
+  - SLOT_V_SHAPED
+  - SLOT_DOVE_TAIL
+  - SLOT_UPSIDE_DOWN_DOVE_TAIL
+  condition: 'exists a in T_v_tool_angles : |ANGLE - a| <= tol_angle'
+  nxNote: the three classes that declare ANGLE; all three are reachable but unobserved in the frozen corpus. SLOT_90_DEGREE
+    declares no ANGLE because its class name fixes it at 90 degrees, which is already a standard form-tool angle
+- id: H54
+  label_en: H54 — Step included angle
+  grade: hard
+  scope_en: single feature
+  statement_en: Keep the included angle of a step at or above 90 degrees.
+  threshold_value: 90
+  threshold_note_en: t_step_angle = 90°
+  external_dependency_en: null
+  validation_status: candidate
+  source_reference: null
+  recommendation_text: null
+  validity_context_note: null
+  retired_reason_en: null
+  authority: pipeline
+  nxStatus: noDomain
+  nxGapKind: domain
+  nxNote: 'NX has no Step class. Beware the collision: NX''s STEP* means a ladder section, not v5.1''s Step, which is a stepped
+    face.'
+  applies_to: []
+  condition: null

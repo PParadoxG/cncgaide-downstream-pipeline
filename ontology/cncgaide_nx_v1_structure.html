@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CNCgAIde NX-line ontology nx_v1 &middot; feature classes, attributes and relations</title>
+<style>
+:root{--bg:#fafaf8;--card:#fff;--ink:#22262e;--mut:#6b7280;--line:#e4e2da;
+ --acc:#31556e;--acc-soft:#e8eef3;--hold:#8a6d1a;--hold-soft:#faf3df;--th:#f2f1ec}
+@media (prefers-color-scheme:dark){:root{--bg:#16181c;--card:#1d2025;--ink:#e6e6e3;--mut:#9aa0a8;
+ --line:#2f333a;--acc:#7fb0d0;--acc-soft:#243642;--hold:#d9bf6d;--hold-soft:#332d1c;--th:#24272d}}
+*{box-sizing:border-box}
+body{margin:0;font:14.5px/1.65 "Segoe UI",system-ui,-apple-system,"Noto Sans SC",sans-serif;
+ color:var(--ink);background:var(--bg)}
+code,.mono{font-family:Consolas,"SF Mono",Menlo,monospace}
+
+.wrap{display:flex;gap:20px;align-items:flex-start;padding:20px}
+nav{flex:0 0 288px;position:sticky;top:20px;background:var(--card);border:1px solid var(--line);
+ border-radius:10px;padding:14px 12px;max-height:calc(100vh - 40px);overflow:auto}
+main{flex:1;min-width:0;background:var(--card);border:1px solid var(--line);border-radius:10px;
+ padding:26px 34px 60px}
+@media(max-width:900px){.wrap{flex-direction:column;padding:12px}nav{position:static;flex:1 1 auto;width:100%;max-height:none}main{width:100%;padding:20px}}
+
+nav .fam{margin:12px 0 3px;font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--mut)}
+nav .fam:first-child{margin-top:0}
+nav .row{display:flex;align-items:baseline;gap:7px;padding:4px 8px;border-radius:6px;cursor:pointer}
+nav .row:hover{background:var(--acc-soft)}
+nav .row.sel{background:var(--acc-soft)}
+nav .cname{font-family:Consolas,monospace;font-size:13.5px;color:var(--acc);font-weight:600}
+nav .label{font-size:12.5px;color:var(--mut)}
+
+h1{margin:0 0 4px;font-size:24px;font-family:Consolas,monospace;font-weight:600}
+.sub{color:var(--mut);font-size:13.5px;margin-bottom:20px}
+h2{font-size:11.5px;color:var(--acc);margin:26px 0 8px;text-transform:uppercase;letter-spacing:.08em;
+ font-weight:700;border-bottom:1px solid var(--line);padding-bottom:4px}
+p{margin:7px 0}
+ul,ol{margin:7px 0;padding-left:20px}
+li{margin:4px 0}
+.def{background:var(--acc-soft);border-left:3px solid var(--acc);padding:11px 15px;
+ border-radius:0 8px 8px 0;margin:4px 0;font-size:15px}
+
+.prop{border:1px solid var(--line);border-radius:9px;padding:13px 17px;margin:11px 0;background:var(--bg)}
+.phead{display:flex;align-items:baseline;gap:9px;flex-wrap:wrap;margin-bottom:5px}
+.phead code{font-size:14.5px;color:var(--acc);font-weight:700}
+.phead .pzh{font-size:13px;color:var(--ink)}
+.phead .pvs{margin-left:auto;font-family:Consolas,monospace;font-size:11.5px;color:var(--mut);
+ border:1px solid var(--line);border-radius:20px;padding:1px 10px;white-space:nowrap}
+.prop p{margin:5px 0}
+.prop ul{margin:5px 0;padding-left:19px;font-size:13.7px}
+.cond{margin-top:8px;font-size:13px;display:flex;gap:8px;align-items:flex-start;
+ border-left:3px solid var(--hold);background:var(--hold-soft);padding:8px 12px;border-radius:0 7px 7px 0}
+.cond .tag{flex:0 0 auto;font-size:11.5px;color:var(--hold);border:1px solid var(--hold);
+ border-radius:5px;padding:0 7px;line-height:1.7;white-space:nowrap}
+.intro{font-size:13.5px;color:var(--mut);border-bottom:1px solid var(--line);padding-bottom:12px;margin-bottom:4px}
+
+/* ---- tabs ---- */
+header{position:sticky;top:0;z-index:20;background:var(--card);border-bottom:1px solid var(--line);
+ display:flex;align-items:center;gap:14px;padding:9px 20px;flex-wrap:wrap}
+header .hd{font-size:15px;margin:0;font-family:Consolas,monospace;font-weight:600;color:var(--ink)}
+header .hdsub{font-size:12.5px;color:var(--mut)}
+.tabs{display:flex;gap:8px}
+.tabs button{border:1px solid var(--line);background:var(--card);color:var(--ink);
+ padding:6px 14px;border-radius:8px;cursor:pointer;font:inherit;font-size:13px}
+.tabs button:hover{background:var(--acc-soft)}
+.tabs button.on{background:var(--acc);color:#fff;border-color:var(--acc)}
+.view{display:none}
+.view.on{display:block}
+
+/* ---- relation matrix ---- */
+.relmain{background:var(--card);border:1px solid var(--line);border-radius:10px;
+ margin:20px;padding:26px 34px 60px}
+@media(max-width:900px){.relmain{margin:12px;padding:20px}}
+#rellegend{display:flex;flex-wrap:wrap;gap:6px 18px;margin:10px 0 16px;font-size:12.5px}
+#rellegend .lg{display:flex;align-items:center;gap:6px}
+#rellegend .sw{width:20px;height:5px;border-radius:3px;display:inline-block}
+#rellegend code{font-size:12px;font-weight:700}
+#clslegend{display:flex;flex-direction:column;gap:3px;margin:0 0 12px;font-size:12px;color:var(--mut)}
+#clslegend .lgfam{display:flex;flex-wrap:wrap;gap:2px 12px;align-items:baseline}
+#clslegend .lgt{font-size:11px;letter-spacing:.06em;text-transform:uppercase;min-width:150px}
+#clslegend .lg code{font-size:11.5px;font-weight:700;color:var(--acc)}
+#clslegend .lg .label{margin-left:3px;font-size:11.5px}
+#matrixwrap{border:1px solid var(--line);border-radius:10px;background:var(--bg)}
+#matrix{border-collapse:separate;border-spacing:0;font-size:11px}
+#matrix th,#matrix td{border-right:1px solid var(--line);border-bottom:1px solid var(--line);
+ padding:2px 4px;text-align:center;min-width:46px;vertical-align:top}
+#matrix th{background:var(--th);position:sticky;top:55px;z-index:2;font-weight:600;
+ font-family:Consolas,monospace;font-size:10.5px;height:auto;padding:5px 2px}
+#matrix th span{white-space:nowrap;display:inline-block;font-family:Consolas,monospace;font-size:11px}
+#matrix th.rowh{position:sticky;left:0;z-index:3;text-align:right;height:auto;
+ white-space:nowrap;font-size:11px;padding:3px 7px;top:auto}
+#matrix tr:first-child th.rowh{z-index:4;top:55px}
+#matrix td.lo{background:var(--th);opacity:.45}
+#matrix td.empty{background:transparent}
+#matrix td .m{display:block;border-radius:4px;padding:0 3px;margin:1px 0;cursor:default;
+ font-family:Consolas,monospace;font-size:10px;line-height:1.5;letter-spacing:.02em}
+
+/* ---- relation entries ---- */
+.relcard{border:1px solid var(--line);border-radius:10px;padding:16px 20px 18px;margin:14px 0;
+ background:var(--bg)}
+.relcard.ret{opacity:.9}
+.relhead{display:flex;align-items:baseline;gap:9px;flex-wrap:wrap;margin-bottom:9px;
+ border-bottom:1px solid var(--line);padding-bottom:8px}
+.relhead .dot{width:10px;height:10px;border-radius:3px;display:inline-block;align-self:center}
+.relhead .rid{font-size:15px;font-weight:700;color:var(--acc);font-family:Consolas,monospace}
+.relhead .rzh{font-size:13.5px}
+.relhead .rtag{font-size:11.5px;color:var(--mut);border:1px solid var(--line);border-radius:20px;
+ padding:1px 10px;white-space:nowrap}
+.relhead .rcount{margin-left:auto;font-family:Consolas,monospace;font-size:11.5px;color:var(--mut)}
+.relcard h3{font-size:11.5px;color:var(--acc);margin:15px 0 6px;text-transform:uppercase;
+ letter-spacing:.07em;font-weight:700}
+.relcard ol,.relcard ul{margin:6px 0;padding-left:20px;font-size:13.7px}
+.relcard ul.excl li{color:var(--ink)}
+.relcard ul.excl{list-style:none;padding-left:2px}
+.relcard ul.excl li:before{content:"✕";color:var(--hold);font-weight:700;margin-right:7px}
+table.obs{border-collapse:collapse;font-size:13px;margin:6px 0;width:100%}
+table.obs th,table.obs td{border:1px solid var(--line);padding:4px 9px;text-align:left}
+table.obs th{background:var(--th);font-size:11.5px;text-transform:uppercase;letter-spacing:.05em;
+ color:var(--mut);font-weight:600}
+table.obs td.num{text-align:right;font-family:Consolas,monospace;width:72px}
+.mut{color:var(--mut);font-size:13px}
+.notline{font-size:13.3px;margin-top:8px;border-left:3px solid var(--hold);
+ background:var(--hold-soft);padding:7px 12px;border-radius:0 7px 7px 0}
+table.obs.rel td:first-child{white-space:nowrap;vertical-align:top}
+table.obs.rel td{vertical-align:top}
+table.obs.rel .dot{width:9px;height:9px;border-radius:3px;display:inline-block;margin-right:6px}
+.relcard{padding:12px 16px 14px;margin:10px 0}
+.relcard .relhead{margin-bottom:4px;padding-bottom:6px}
+.relcard ul{margin:6px 0;padding-left:20px;font-size:13.5px}
+
+.relmain h2{font-size:11.5px;color:var(--acc);margin:26px 0 8px;text-transform:uppercase;
+ letter-spacing:.08em;font-weight:700;border-bottom:1px solid var(--line);padding-bottom:4px}
+
+/* ---- heuristic rules ---- */
+.hmain{background:var(--card);border:1px solid var(--line);border-radius:10px;
+ margin:20px;padding:26px 34px 60px}
+@media(max-width:900px){.hmain{margin:12px;padding:20px}}
+
+.hcard{border:1px solid var(--line);border-radius:9px;padding:12px 16px;margin:10px 0;background:var(--bg)}
+.hhead{display:flex;align-items:baseline;gap:9px;flex-wrap:wrap;margin-bottom:4px}
+.hid{font-size:14.5px;color:var(--acc);font-weight:700}
+.hzh{font-size:13px;color:var(--ink)}
+.hscope{margin-left:auto;font-family:Consolas,monospace;font-size:11.5px;color:var(--mut);
+ border:1px solid var(--line);border-radius:20px;padding:1px 10px;white-space:nowrap}
+.hstmt{margin:4px 0 7px;font-size:14px}
+.hexpr{margin:0;padding:8px 12px;background:var(--th);border-radius:7px;
+ font-family:Consolas,"SF Mono",Menlo,monospace;font-size:12.5px;line-height:1.6;
+ white-space:pre-wrap;overflow-x:auto;color:var(--ink)}
+.hth{margin-top:7px;font-size:12.5px;color:var(--mut);font-family:Consolas,monospace}
+
+.htabwrap{border:1px solid var(--line);border-radius:10px;background:var(--bg)}
+.htab{border-collapse:separate;border-spacing:0;width:100%;font-size:13px}
+.htab th,.htab td{border-right:1px solid var(--line);border-bottom:1px solid var(--line);
+ padding:7px 10px;text-align:left;vertical-align:top}
+.htab th{background:var(--th);position:sticky;top:55px;z-index:2;font-weight:600;font-size:12px;white-space:nowrap}
+.htab td.small{font-size:12px;color:var(--mut)}
+.htab td.mono{font-family:Consolas,"SF Mono",Menlo,monospace;font-size:11.5px;line-height:1.55;min-width:260px}
+.htab tr.hret td{opacity:.62}
+.htab .rtag{font-size:11px;color:var(--mut);border:1px solid var(--line);border-radius:5px;
+ padding:0 6px;display:inline-block;margin-top:4px}
+.htab .rwhy{font-size:12px;color:var(--mut);margin-top:4px}
+.htab code{font-size:12px;color:var(--acc)}
+
+
+/* the colour block for a relation inside a matrix cell.  v5.1 uses a chip carrying the
+   abbreviation; here the family names are already in the header, so the cell needs only a
+   block that says which relation it is. */
+.cellchip{width:11px;height:11px;border-radius:3px;display:inline-block;margin:1px}
+#matrix td.lo{background:var(--th)}
+.relhead .rzh{font-size:13px;color:var(--mut)}
+
+/* the tree on the left is wider here.  v5.1's 288px fits its own short labels but not NX's
+   UPPER_SNAKE names: the widest row, HOLE_ROUND_INTERRUPTED_STRAIGHT, needs 286px at the
+   fourth indent level, so almost every row lost its tail.  340px keeps all 84 class names
+   readable in full.  It is written here rather than by editing the block above, because
+   those 156 lines are a verbatim copy of v5.1's. */
+nav{flex-basis:340px}
+</style>
+</head>
+<body>
+<header>
+  <div class="tabs">
+    <button id="tb-cls" class="on" onclick="showTab('cls')">1 &middot; Feature classes and attributes</button>
+    <button id="tb-rel" onclick="showTab('rel')">2 &middot; Relations</button>
+    <button id="tb-heu" onclick="showTab('heu')">3 &middot; Heuristic rules</button>
+  </div>
+</header>
+
+<div class="view on" id="v-cls">
+<div class="wrap">
+  <nav id="list"></nav>
+  <main id="panel"></main>
+</div>
+</div>
+
+<div class="view" id="v-rel">
+<main class="relmain">
+  <div id="rellegend"></div>
+  <div id="clslegend"></div>
+  <div id="matrixwrap"></div>
+  <div id="reldetail"></div>
+</main>
+</div>
+
+<div class="view" id="v-heu">
+<main class="hmain" id="hmain"></main>
+</div>
+
+<script>
+/* ══════ GENERATED DATA — written from source/*.yaml by build/gen_page_data.py; do not edit ══════ */
+/* each entry of C: [Type, parent|null, abstract, NiceName|0, own attribute indices[]]
+   each entry of A: [name, DataType, Unit, SubType, schema|runtime] */
+const A = [["ANGLE","Double","Angle","Toleranced","schema"],["ANGLE_BOTTOM_1","Double","Angle",null,"schema"],["ANGLE_BOTTOM_2","Double","Angle",null,"schema"],["ANGLE_BOTTOM_3","Double","Angle",null,"schema"],["ANGLE_BOTTOM_4","Double","Angle",null,"schema"],["ANGLE_BOTTOM_5","Double","Angle",null,"schema"],["ANGLE_BOTTOM_CHAMFER","Double","Angle",null,"schema"],["ANGLE_BOTTOM_CHAMFER_1","Double","Angle",null,"schema"],["ANGLE_BOTTOM_CHAMFER_2","Double","Angle",null,"schema"],["ANGLE_BOTTOM_CHAMFER_3","Double","Angle",null,"schema"],["ANGLE_BOTTOM_CHAMFER_4","Double","Angle",null,"schema"],["ANGLE_BOTTOM_CHAMFER_5","Double","Angle",null,"schema"],["ANGLE_BOTTOM_CHAMFER_6","Double","Angle",null,"schema"],["ANGLE_LOWER","Double","Angle","Toleranced","schema"],["ANGLE_TOP_CHAMFER","Double","Angle",null,"schema"],["ANGLE_TOP_CHAMFER_1","Double","Angle",null,"schema"],["ANGLE_TOP_CHAMFER_2","Double","Angle",null,"schema"],["ANGLE_TOP_CHAMFER_3","Double","Angle",null,"schema"],["ANGLE_TOP_CHAMFER_4","Double","Angle",null,"schema"],["ANGLE_TOP_CHAMFER_5","Double","Angle",null,"schema"],["ANGLE_TOP_CHAMFER_6","Double","Angle",null,"schema"],["ANGLE_UPPER","Double","Angle","Toleranced","schema"],["AREA","Double","Area",null,"schema"],["BOTTOM_RADIUS","Double","Length","Toleranced","schema"],["BOTTOM_RADIUS_2","Double","Length","Toleranced","schema"],["BOTTOM_RADIUS_2_LOWER","Double","Length","Toleranced","schema"],["BOTTOM_RADIUS_2_UPPER","Double","Length","Toleranced","schema"],["BOTTOM_RADIUS_LOWER","Double","Length","Toleranced","schema"],["BOTTOM_RADIUS_UPPER","Double","Length","Toleranced","schema"],["BOTTOM_ROUGHNESS","String",null,"Roughness","schema"],["BOTTOM_ROUGHNESS_1","String",null,"Roughness","schema"],["BOTTOM_ROUGHNESS_1_ALLOWANCE","String",null,"Roughness","schema"],["BOTTOM_ROUGHNESS_1_DIRECTION_OF_LAY","String",null,"Roughness","schema"],["BOTTOM_ROUGHNESS_1_MATERIAL_REMOVAL","String",null,"Roughness","schema"],["BOTTOM_ROUGHNESS_1_MODIFIER","String",null,"Roughness","schema"],["BOTTOM_ROUGHNESS_1_PROCESS","String",null,"Roughness","schema"],["BOTTOM_ROUGHNESS_1_ROUGHNESS_CUTOFF","String",null,"Roughness","schema"],["BOTTOM_ROUGHNESS_1_ROUGHNESS_MIN","String",null,"Roughness","schema"],["BOTTOM_ROUGHNESS_1_ROUGHNESS_SPACING","String",null,"Roughness","schema"],["BOTTOM_ROUGHNESS_1_ROUGHNESS_VALUE","String",null,"Roughness","schema"],["BOTTOM_ROUGHNESS_1_STANDARD","String",null,"Roughness","schema"],["BOTTOM_ROUGHNESS_1_WAVINESS","String",null,"Roughness","schema"],["BOTTOM_ROUGHNESS_2","String",null,"Roughness","schema"],["BOTTOM_ROUGHNESS_2_ALLOWANCE","String",null,"Roughness","schema"],["BOTTOM_ROUGHNESS_2_DIRECTION_OF_LAY","String",null,"Roughness","schema"],["BOTTOM_ROUGHNESS_2_MATERIAL_REMOVAL","String",null,"Roughness","schema"],["BOTTOM_ROUGHNESS_2_MODIFIER","String",null,"Roughness","schema"],["BOTTOM_ROUGHNESS_2_PROCESS","String",null,"Roughness","schema"],["BOTTOM_ROUGHNESS_2_ROUGHNESS_CUTOFF","String",null,"Roughness","schema"],["BOTTOM_ROUGHNESS_2_ROUGHNESS_MIN","String",null,"Roughness","schema"],["BOTTOM_ROUGHNESS_2_ROUGHNESS_SPACING","String",null,"Roughness","schema"],["BOTTOM_ROUGHNESS_2_ROUGHNESS_VALUE","String",null,"Roughness","schema"],["BOTTOM_ROUGHNESS_2_STANDARD","String",null,"Roughness","schema"],["BOTTOM_ROUGHNESS_2_WAVINESS","String",null,"Roughness","schema"],["BOTTOM_ROUGHNESS_3","String",null,"Roughness","schema"],["BOTTOM_ROUGHNESS_3_ALLOWANCE","String",null,"Roughness","schema"],["BOTTOM_ROUGHNESS_3_DIRECTION_OF_LAY","String",null,"Roughness","schema"],["BOTTOM_ROUGHNESS_3_MATERIAL_REMOVAL","String",null,"Roughness","schema"],["BOTTOM_ROUGHNESS_3_MODIFIER","String",null,"Roughness","schema"],["BOTTOM_ROUGHNESS_3_PROCESS","String",null,"Roughness","schema"],["BOTTOM_ROUGHNESS_3_ROUGHNESS_CUTOFF","String",null,"Roughness","schema"],["BOTTOM_ROUGHNESS_3_ROUGHNESS_MIN","String",null,"Roughness","schema"],["BOTTOM_ROUGHNESS_3_ROUGHNESS_SPACING","String",null,"Roughness","schema"],["BOTTOM_ROUGHNESS_3_ROUGHNESS_VALUE","String",null,"Roughness","schema"],["BOTTOM_ROUGHNESS_3_STANDARD","String",null,"Roughness","schema"],["BOTTOM_ROUGHNESS_3_WAVINESS","String",null,"Roughness","schema"],["BOTTOM_ROUGHNESS_4","String",null,"Roughness","schema"],["BOTTOM_ROUGHNESS_4_ALLOWANCE","String",null,"Roughness","schema"],["BOTTOM_ROUGHNESS_4_DIRECTION_OF_LAY","String",null,"Roughness","schema"],["BOTTOM_ROUGHNESS_4_MATERIAL_REMOVAL","String",null,"Roughness","schema"],["BOTTOM_ROUGHNESS_4_MODIFIER","String",null,"Roughness","schema"],["BOTTOM_ROUGHNESS_4_PROCESS","String",null,"Roughness","schema"],["BOTTOM_ROUGHNESS_4_ROUGHNESS_CUTOFF","String",null,"Roughness","schema"],["BOTTOM_ROUGHNESS_4_ROUGHNESS_MIN","String",null,"Roughness","schema"],["BOTTOM_ROUGHNESS_4_ROUGHNESS_SPACING","String",null,"Roughness","schema"],["BOTTOM_ROUGHNESS_4_ROUGHNESS_VALUE","String",null,"Roughness","schema"],["BOTTOM_ROUGHNESS_4_STANDARD","String",null,"Roughness","schema"],["BOTTOM_ROUGHNESS_4_WAVINESS","String",null,"Roughness","schema"],["BOTTOM_ROUGHNESS_5","String",null,"Roughness","schema"],["BOTTOM_ROUGHNESS_5_ALLOWANCE","String",null,"Roughness","schema"],["BOTTOM_ROUGHNESS_5_DIRECTION_OF_LAY","String",null,"Roughness","schema"],["BOTTOM_ROUGHNESS_5_MATERIAL_REMOVAL","String",null,"Roughness","schema"],["BOTTOM_ROUGHNESS_5_MODIFIER","String",null,"Roughness","schema"],["BOTTOM_ROUGHNESS_5_PROCESS","String",null,"Roughness","schema"],["BOTTOM_ROUGHNESS_5_ROUGHNESS_CUTOFF","String",null,"Roughness","schema"],["BOTTOM_ROUGHNESS_5_ROUGHNESS_MIN","String",null,"Roughness","schema"],["BOTTOM_ROUGHNESS_5_ROUGHNESS_SPACING","String",null,"Roughness","schema"],["BOTTOM_ROUGHNESS_5_ROUGHNESS_VALUE","String",null,"Roughness","schema"],["BOTTOM_ROUGHNESS_5_STANDARD","String",null,"Roughness","schema"],["BOTTOM_ROUGHNESS_5_WAVINESS","String",null,"Roughness","schema"],["BOTTOM_ROUGHNESS_ALLOWANCE","String",null,"Roughness","schema"],["BOTTOM_ROUGHNESS_DIRECTION_OF_LAY","String",null,"Roughness","schema"],["BOTTOM_ROUGHNESS_MATERIAL_REMOVAL","String",null,"Roughness","schema"],["BOTTOM_ROUGHNESS_MODIFIER","String",null,"Roughness","schema"],["BOTTOM_ROUGHNESS_PROCESS","String",null,"Roughness","schema"],["BOTTOM_ROUGHNESS_ROUGHNESS_CUTOFF","String",null,"Roughness","schema"],["BOTTOM_ROUGHNESS_ROUGHNESS_MIN","String",null,"Roughness","schema"],["BOTTOM_ROUGHNESS_ROUGHNESS_SPACING","String",null,"Roughness","schema"],["BOTTOM_ROUGHNESS_ROUGHNESS_VALUE","String",null,"Roughness","schema"],["BOTTOM_ROUGHNESS_STANDARD","String",null,"Roughness","schema"],["BOTTOM_ROUGHNESS_WAVINESS","String",null,"Roughness","schema"],["CHAMFER","String",null,null,"schema"],["COLOR",null,null,null,"runtime"],["COMMENT",null,null,null,"runtime"],["CURVE_ANGLE","Double","Angle",null,"schema"],["CURVE_RADIUS","Double","Length","Toleranced","schema"],["CURVE_RADIUS_LOWER","Double","Length","Toleranced","schema"],["CURVE_RADIUS_UPPER","Double","Length","Toleranced","schema"],["DEPTH","Double","Length","Toleranced","schema"],["DEPTH_1","Double","Length","Toleranced","schema"],["DEPTH_1_LOWER","Double","Length","Toleranced","schema"],["DEPTH_1_UPPER","Double","Length","Toleranced","schema"],["DEPTH_2","Double","Length","Toleranced","schema"],["DEPTH_2_LOWER","Double","Length","Toleranced","schema"],["DEPTH_2_UPPER","Double","Length","Toleranced","schema"],["DEPTH_3","Double","Length","Toleranced","schema"],["DEPTH_3_LOWER","Double","Length","Toleranced","schema"],["DEPTH_3_UPPER","Double","Length","Toleranced","schema"],["DEPTH_4","Double","Length","Toleranced","schema"],["DEPTH_4_LOWER","Double","Length","Toleranced","schema"],["DEPTH_4_UPPER","Double","Length","Toleranced","schema"],["DEPTH_5","Double","Length","Toleranced","schema"],["DEPTH_5_LOWER","Double","Length","Toleranced","schema"],["DEPTH_5_UPPER","Double","Length","Toleranced","schema"],["DEPTH_6","Double","Length","Toleranced","schema"],["DEPTH_6_LOWER","Double","Length","Toleranced","schema"],["DEPTH_6_UPPER","Double","Length","Toleranced","schema"],["DEPTH_BOTTOM_CHAMFER","Double","Length",null,"schema"],["DEPTH_BOTTOM_CHAMFER_1","Double","Length",null,"schema"],["DEPTH_BOTTOM_CHAMFER_2","Double","Length",null,"schema"],["DEPTH_BOTTOM_CHAMFER_3","Double","Length",null,"schema"],["DEPTH_BOTTOM_CHAMFER_4","Double","Length",null,"schema"],["DEPTH_BOTTOM_CHAMFER_5","Double","Length",null,"schema"],["DEPTH_BOTTOM_CHAMFER_6","Double","Length",null,"schema"],["DEPTH_LOWER","Double","Length","Toleranced","schema"],["DEPTH_TOP_CHAMFER","Double","Length",null,"schema"],["DEPTH_TOP_CHAMFER_1","Double","Length","Toleranced","schema"],["DEPTH_TOP_CHAMFER_1_LOWER","Double","Length","Toleranced","schema"],["DEPTH_TOP_CHAMFER_1_UPPER","Double","Length","Toleranced","schema"],["DEPTH_TOP_CHAMFER_2","Double","Length","Toleranced","schema"],["DEPTH_TOP_CHAMFER_2_LOWER","Double","Length","Toleranced","schema"],["DEPTH_TOP_CHAMFER_2_UPPER","Double","Length","Toleranced","schema"],["DEPTH_TOP_CHAMFER_3","Double","Length",null,"schema"],["DEPTH_TOP_CHAMFER_4","Double","Length",null,"schema"],["DEPTH_TOP_CHAMFER_5","Double","Length",null,"schema"],["DEPTH_TOP_CHAMFER_6","Double","Length",null,"schema"],["DEPTH_UPPER","Double","Length","Toleranced","schema"],["DIAMETER","Double","Length","Toleranced","schema"],["DIAMETER_1","Double","Length","Toleranced","schema"],["DIAMETER_1_LOWER","Double","Length","Toleranced","schema"],["DIAMETER_1_UPPER","Double","Length","Toleranced","schema"],["DIAMETER_2","Double","Length","Toleranced","schema"],["DIAMETER_2_LOWER","Double","Length","Toleranced","schema"],["DIAMETER_2_UPPER","Double","Length","Toleranced","schema"],["DIAMETER_3","Double","Length","Toleranced","schema"],["DIAMETER_3_LOWER","Double","Length","Toleranced","schema"],["DIAMETER_3_UPPER","Double","Length","Toleranced","schema"],["DIAMETER_4","Double","Length","Toleranced","schema"],["DIAMETER_4_LOWER","Double","Length","Toleranced","schema"],["DIAMETER_4_UPPER","Double","Length","Toleranced","schema"],["DIAMETER_5","Double","Length","Toleranced","schema"],["DIAMETER_5_LOWER","Double","Length","Toleranced","schema"],["DIAMETER_5_UPPER","Double","Length","Toleranced","schema"],["DIAMETER_6","Double","Length","Toleranced","schema"],["DIAMETER_6_LOWER","Double","Length","Toleranced","schema"],["DIAMETER_6_UPPER","Double","Length","Toleranced","schema"],["DIAMETER_LOWER","Double","Length","Toleranced","schema"],["DIAMETER_UPPER","Double","Length","Toleranced","schema"],["FACES_BOTTOM","Face",null,null,"schema"],["FACES_BOTTOM_1","Face",null,null,"schema"],["FACES_BOTTOM_2","Face",null,null,"schema"],["FACES_BOTTOM_3","Face",null,null,"schema"],["FACES_BOTTOM_4","Face",null,null,"schema"],["FACES_BOTTOM_5","Face",null,null,"schema"],["FACES_BOTTOM_CHAMFER","Face",null,null,"schema"],["FACES_BOTTOM_CHAMFER_1","Face",null,null,"schema"],["FACES_BOTTOM_CHAMFER_2","Face",null,null,"schema"],["FACES_BOTTOM_CHAMFER_3","Face",null,null,"schema"],["FACES_BOTTOM_CHAMFER_4","Face",null,null,"schema"],["FACES_BOTTOM_CHAMFER_5","Face",null,null,"schema"],["FACES_BOTTOM_CHAMFER_6","Face",null,null,"schema"],["FACES_BOTTOM_RADIUS","Face",null,null,"schema"],["FACES_CYLINDER_1","Face",null,null,"schema"],["FACES_CYLINDER_2","Face",null,null,"schema"],["FACES_CYLINDER_3","Face",null,null,"schema"],["FACES_CYLINDER_4","Face",null,null,"schema"],["FACES_CYLINDER_5","Face",null,null,"schema"],["FACES_CYLINDER_6","Face",null,null,"schema"],["FACES_FLOOR","Face",null,null,"schema"],["FACES_TOP","Face",null,null,"schema"],["FACES_TOP_CHAMFER","Face",null,null,"schema"],["FACES_TOP_CHAMFER_1","Face",null,null,"schema"],["FACES_TOP_CHAMFER_2","Face",null,null,"schema"],["FACES_TOP_CHAMFER_3","Face",null,null,"schema"],["FACES_TOP_CHAMFER_4","Face",null,null,"schema"],["FACES_TOP_CHAMFER_5","Face",null,null,"schema"],["FACES_TOP_CHAMFER_6","Face",null,null,"schema"],["FACES_WALL","Face",null,null,"schema"],["ISRECOGNIZEDFEATURE","Integer",null,null,"runtime"],["IS_THROUGH","String",null,null,"schema"],["I_DIAMETER","Double","Length","Toleranced","schema"],["I_DIAMETER_LOWER","Double","Length","Toleranced","schema"],["I_DIAMETER_UPPER","Double","Length","Toleranced","schema"],["LARGEST_IN_CIRCLE","Double","Length","Toleranced","schema"],["LARGEST_IN_CIRCLE_LOWER","Double","Length","Toleranced","schema"],["LARGEST_IN_CIRCLE_UPPER","Double","Length","Toleranced","schema"],["LENGTH","Double","Length","Toleranced","schema"],["LENGTH_LOWER","Double","Length","Toleranced","schema"],["LENGTH_UPPER","Double","Length","Toleranced","schema"],["MACHINE_TWO_SIDED",null,null,null,"runtime"],["MACHINING_RULE",null,null,null,"runtime"],["MAX_SIDE_ANGLE","Double","Angle",null,"schema"],["MIN_RADIUS","Double","Length","Toleranced","schema"],["MIN_RADIUS_LOWER","Double","Length","Toleranced","schema"],["MIN_RADIUS_UPPER","Double","Length","Toleranced","schema"],["MIN_SIDE_ANGLE","Double","Angle",null,"schema"],["MW_HOLE_DOWEL_FIT",null,null,null,"runtime"],["MW_HOLE_EJ_PIN_FIT",null,null,null,"runtime"],["MW_HOLE_GUIDE_PIN_FIT",null,null,null,"runtime"],["NAME",null,null,null,"runtime"],["OFFSET","Double","Length","Toleranced","schema"],["OFFSET_LOWER","Double","Length","Toleranced","schema"],["OFFSET_UPPER","Double","Length","Toleranced","schema"],["OPTION_CHAMFER",null,null,null,"runtime"],["OPTION_FINISH_FLOOR",null,null,null,"runtime"],["OPTION_FINISH_WALLS",null,null,null,"runtime"],["OPTION_FIT_H7",null,null,null,"runtime"],["OPTION_TAP_THREAD",null,null,null,"runtime"],["O_DIAMETER","Double","Length","Toleranced","schema"],["O_DIAMETER_LOWER","Double","Length","Toleranced","schema"],["O_DIAMETER_UPPER","Double","Length","Toleranced","schema"],["RADIUS","Double","Length","Toleranced","schema"],["RADIUS_BOTTOM_CHAMFER","Double","Length",null,"schema"],["RADIUS_BOTTOM_CHAMFER_1","Double","Length",null,"schema"],["RADIUS_BOTTOM_CHAMFER_2","Double","Length",null,"schema"],["RADIUS_BOTTOM_CHAMFER_3","Double","Length",null,"schema"],["RADIUS_BOTTOM_CHAMFER_4","Double","Length",null,"schema"],["RADIUS_BOTTOM_CHAMFER_5","Double","Length",null,"schema"],["RADIUS_BOTTOM_CHAMFER_6","Double","Length",null,"schema"],["RADIUS_LOWER","Double","Length","Toleranced","schema"],["RADIUS_TOP_CHAMFER","Double","Length",null,"schema"],["RADIUS_TOP_CHAMFER_1","Double","Length",null,"schema"],["RADIUS_TOP_CHAMFER_2","Double","Length",null,"schema"],["RADIUS_TOP_CHAMFER_3","Double","Length",null,"schema"],["RADIUS_TOP_CHAMFER_4","Double","Length",null,"schema"],["RADIUS_TOP_CHAMFER_5","Double","Length",null,"schema"],["RADIUS_TOP_CHAMFER_6","Double","Length",null,"schema"],["RADIUS_UPPER","Double","Length","Toleranced","schema"],["SIDE_1_ROUGHNESS","String",null,"Roughness","schema"],["SIDE_1_ROUGHNESS_ALLOWANCE","String",null,"Roughness","schema"],["SIDE_1_ROUGHNESS_DIRECTION_OF_LAY","String",null,"Roughness","schema"],["SIDE_1_ROUGHNESS_MATERIAL_REMOVAL","String",null,"Roughness","schema"],["SIDE_1_ROUGHNESS_MODIFIER","String",null,"Roughness","schema"],["SIDE_1_ROUGHNESS_PROCESS","String",null,"Roughness","schema"],["SIDE_1_ROUGHNESS_ROUGHNESS_CUTOFF","String",null,"Roughness","schema"],["SIDE_1_ROUGHNESS_ROUGHNESS_MIN","String",null,"Roughness","schema"],["SIDE_1_ROUGHNESS_ROUGHNESS_SPACING","String",null,"Roughness","schema"],["SIDE_1_ROUGHNESS_ROUGHNESS_VALUE","String",null,"Roughness","schema"],["SIDE_1_ROUGHNESS_STANDARD","String",null,"Roughness","schema"],["SIDE_1_ROUGHNESS_WAVINESS","String",null,"Roughness","schema"],["SIDE_2_ROUGHNESS","String",null,"Roughness","schema"],["SIDE_2_ROUGHNESS_ALLOWANCE","String",null,"Roughness","schema"],["SIDE_2_ROUGHNESS_DIRECTION_OF_LAY","String",null,"Roughness","schema"],["SIDE_2_ROUGHNESS_MATERIAL_REMOVAL","String",null,"Roughness","schema"],["SIDE_2_ROUGHNESS_MODIFIER","String",null,"Roughness","schema"],["SIDE_2_ROUGHNESS_PROCESS","String",null,"Roughness","schema"],["SIDE_2_ROUGHNESS_ROUGHNESS_CUTOFF","String",null,"Roughness","schema"],["SIDE_2_ROUGHNESS_ROUGHNESS_MIN","String",null,"Roughness","schema"],["SIDE_2_ROUGHNESS_ROUGHNESS_SPACING","String",null,"Roughness","schema"],["SIDE_2_ROUGHNESS_ROUGHNESS_VALUE","String",null,"Roughness","schema"],["SIDE_2_ROUGHNESS_STANDARD","String",null,"Roughness","schema"],["SIDE_2_ROUGHNESS_WAVINESS","String",null,"Roughness","schema"],["SIDE_ROUGHNESS","String",null,"Roughness","schema"],["SIDE_ROUGHNESS_1","String",null,"Roughness","schema"],["SIDE_ROUGHNESS_1_ALLOWANCE","String",null,"Roughness","schema"],["SIDE_ROUGHNESS_1_DIRECTION_OF_LAY","String",null,"Roughness","schema"],["SIDE_ROUGHNESS_1_MATERIAL_REMOVAL","String",null,"Roughness","schema"],["SIDE_ROUGHNESS_1_MODIFIER","String",null,"Roughness","schema"],["SIDE_ROUGHNESS_1_PROCESS","String",null,"Roughness","schema"],["SIDE_ROUGHNESS_1_ROUGHNESS_CUTOFF","String",null,"Roughness","schema"],["SIDE_ROUGHNESS_1_ROUGHNESS_MIN","String",null,"Roughness","schema"],["SIDE_ROUGHNESS_1_ROUGHNESS_SPACING","String",null,"Roughness","schema"],["SIDE_ROUGHNESS_1_ROUGHNESS_VALUE","String",null,"Roughness","schema"],["SIDE_ROUGHNESS_1_STANDARD","String",null,"Roughness","schema"],["SIDE_ROUGHNESS_1_WAVINESS","String",null,"Roughness","schema"],["SIDE_ROUGHNESS_2","String",null,"Roughness","schema"],["SIDE_ROUGHNESS_2_ALLOWANCE","String",null,"Roughness","schema"],["SIDE_ROUGHNESS_2_DIRECTION_OF_LAY","String",null,"Roughness","schema"],["SIDE_ROUGHNESS_2_MATERIAL_REMOVAL","String",null,"Roughness","schema"],["SIDE_ROUGHNESS_2_MODIFIER","String",null,"Roughness","schema"],["SIDE_ROUGHNESS_2_PROCESS","String",null,"Roughness","schema"],["SIDE_ROUGHNESS_2_ROUGHNESS_CUTOFF","String",null,"Roughness","schema"],["SIDE_ROUGHNESS_2_ROUGHNESS_MIN","String",null,"Roughness","schema"],["SIDE_ROUGHNESS_2_ROUGHNESS_SPACING","String",null,"Roughness","schema"],["SIDE_ROUGHNESS_2_ROUGHNESS_VALUE","String",null,"Roughness","schema"],["SIDE_ROUGHNESS_2_STANDARD","String",null,"Roughness","schema"],["SIDE_ROUGHNESS_2_WAVINESS","String",null,"Roughness","schema"],["SIDE_ROUGHNESS_3","String",null,"Roughness","schema"],["SIDE_ROUGHNESS_3_ALLOWANCE","String",null,"Roughness","schema"],["SIDE_ROUGHNESS_3_DIRECTION_OF_LAY","String",null,"Roughness","schema"],["SIDE_ROUGHNESS_3_MATERIAL_REMOVAL","String",null,"Roughness","schema"],["SIDE_ROUGHNESS_3_MODIFIER","String",null,"Roughness","schema"],["SIDE_ROUGHNESS_3_PROCESS","String",null,"Roughness","schema"],["SIDE_ROUGHNESS_3_ROUGHNESS_CUTOFF","String",null,"Roughness","schema"],["SIDE_ROUGHNESS_3_ROUGHNESS_MIN","String",null,"Roughness","schema"],["SIDE_ROUGHNESS_3_ROUGHNESS_SPACING","String",null,"Roughness","schema"],["SIDE_ROUGHNESS_3_ROUGHNESS_VALUE","String",null,"Roughness","schema"],["SIDE_ROUGHNESS_3_STANDARD","String",null,"Roughness","schema"],["SIDE_ROUGHNESS_3_WAVINESS","String",null,"Roughness","schema"],["SIDE_ROUGHNESS_4","String",null,"Roughness","schema"],["SIDE_ROUGHNESS_4_ALLOWANCE","String",null,"Roughness","schema"],["SIDE_ROUGHNESS_4_DIRECTION_OF_LAY","String",null,"Roughness","schema"],["SIDE_ROUGHNESS_4_MATERIAL_REMOVAL","String",null,"Roughness","schema"],["SIDE_ROUGHNESS_4_MODIFIER","String",null,"Roughness","schema"],["SIDE_ROUGHNESS_4_PROCESS","String",null,"Roughness","schema"],["SIDE_ROUGHNESS_4_ROUGHNESS_CUTOFF","String",null,"Roughness","schema"],["SIDE_ROUGHNESS_4_ROUGHNESS_MIN","String",null,"Roughness","schema"],["SIDE_ROUGHNESS_4_ROUGHNESS_SPACING","String",null,"Roughness","schema"],["SIDE_ROUGHNESS_4_ROUGHNESS_VALUE","String",null,"Roughness","schema"],["SIDE_ROUGHNESS_4_STANDARD","String",null,"Roughness","schema"],["SIDE_ROUGHNESS_4_WAVINESS","String",null,"Roughness","schema"],["SIDE_ROUGHNESS_5","String",null,"Roughness","schema"],["SIDE_ROUGHNESS_5_ALLOWANCE","String",null,"Roughness","schema"],["SIDE_ROUGHNESS_5_DIRECTION_OF_LAY","String",null,"Roughness","schema"],["SIDE_ROUGHNESS_5_MATERIAL_REMOVAL","String",null,"Roughness","schema"],["SIDE_ROUGHNESS_5_MODIFIER","String",null,"Roughness","schema"],["SIDE_ROUGHNESS_5_PROCESS","String",null,"Roughness","schema"],["SIDE_ROUGHNESS_5_ROUGHNESS_CUTOFF","String",null,"Roughness","schema"],["SIDE_ROUGHNESS_5_ROUGHNESS_MIN","String",null,"Roughness","schema"],["SIDE_ROUGHNESS_5_ROUGHNESS_SPACING","String",null,"Roughness","schema"],["SIDE_ROUGHNESS_5_ROUGHNESS_VALUE","String",null,"Roughness","schema"],["SIDE_ROUGHNESS_5_STANDARD","String",null,"Roughness","schema"],["SIDE_ROUGHNESS_5_WAVINESS","String",null,"Roughness","schema"],["SIDE_ROUGHNESS_6","String",null,"Roughness","schema"],["SIDE_ROUGHNESS_6_ALLOWANCE","String",null,"Roughness","schema"],["SIDE_ROUGHNESS_6_DIRECTION_OF_LAY","String",null,"Roughness","schema"],["SIDE_ROUGHNESS_6_MATERIAL_REMOVAL","String",null,"Roughness","schema"],["SIDE_ROUGHNESS_6_MODIFIER","String",null,"Roughness","schema"],["SIDE_ROUGHNESS_6_PROCESS","String",null,"Roughness","schema"],["SIDE_ROUGHNESS_6_ROUGHNESS_CUTOFF","String",null,"Roughness","schema"],["SIDE_ROUGHNESS_6_ROUGHNESS_MIN","String",null,"Roughness","schema"],["SIDE_ROUGHNESS_6_ROUGHNESS_SPACING","String",null,"Roughness","schema"],["SIDE_ROUGHNESS_6_ROUGHNESS_VALUE","String",null,"Roughness","schema"],["SIDE_ROUGHNESS_6_STANDARD","String",null,"Roughness","schema"],["SIDE_ROUGHNESS_6_WAVINESS","String",null,"Roughness","schema"],["SIDE_ROUGHNESS_ALLOWANCE","String",null,"Roughness","schema"],["SIDE_ROUGHNESS_DIRECTION_OF_LAY","String",null,"Roughness","schema"],["SIDE_ROUGHNESS_MATERIAL_REMOVAL","String",null,"Roughness","schema"],["SIDE_ROUGHNESS_MODIFIER","String",null,"Roughness","schema"],["SIDE_ROUGHNESS_PROCESS","String",null,"Roughness","schema"],["SIDE_ROUGHNESS_ROUGHNESS_CUTOFF","String",null,"Roughness","schema"],["SIDE_ROUGHNESS_ROUGHNESS_MIN","String",null,"Roughness","schema"],["SIDE_ROUGHNESS_ROUGHNESS_SPACING","String",null,"Roughness","schema"],["SIDE_ROUGHNESS_ROUGHNESS_VALUE","String",null,"Roughness","schema"],["SIDE_ROUGHNESS_STANDARD","String",null,"Roughness","schema"],["SIDE_ROUGHNESS_WAVINESS","String",null,"Roughness","schema"],["START_HOLE_DIAMETER","Double","Length",null,"schema"],["START_HOLE_POS_X","Double","Length",null,"schema"],["START_HOLE_POS_Y","Double","Length",null,"schema"],["STOCK_FLOOR","Double","Length",null,"schema"],["STOCK_TOP","Double","Length",null,"schema"],["STOCK_WALL","Double","Length",null,"schema"],["SUBTYPE","Integer",null,null,"runtime"],["THICKNESS","Double","Length",null,"schema"],["THREAD_ANGLE","Double","Angle","Thread","schema"],["THREAD_CALLOUT","String",null,"Thread","schema"],["THREAD_DIAMETER_NR","Double",null,"Thread","schema"],["THREAD_ENGLISH_CLASS","Double",null,"Thread","schema"],["THREAD_FORM","String",null,"Thread","schema"],["THREAD_LENGTH","Double","Length","Thread","schema"],["THREAD_MAJOR_DIAMETER","Double","Length","Thread","schema"],["THREAD_METHOD","String",null,"Thread","schema"],["THREAD_METRIC_M_DIA_DEVIATION","String",null,"Thread","schema"],["THREAD_METRIC_M_DIA_GRADE","Double",null,"Thread","schema"],["THREAD_METRIC_PITCH_DIA_DEVIATION","String",null,"Thread","schema"],["THREAD_METRIC_PITCH_DIA_GRADE","Double",null,"Thread","schema"],["THREAD_MINOR_DIAMETER","Double","Length","Thread","schema"],["THREAD_NUMBER_OF_STARTS","Integer",null,"Thread","schema"],["THREAD_PITCH","Double","Length","Thread","schema"],["THREAD_ROTATION","String",null,"Thread","schema"],["THREAD_TAPERED","String",null,"Thread","schema"],["THREAD_TAPPED_DRILL_SIZE","Double","Length","Thread","schema"],["TILTED_BOTTOM_DEPTH","Double","Length",null,"schema"],["TILTED_TOP_DEPTH","Double","Length",null,"schema"],["TIP_ANGLE","Double","Angle",null,"schema"],["TOP_OBSTRUCTED","Double","Length",null,"schema"],["TOP_ROUGHNESS","String",null,"Roughness","schema"],["TOP_ROUGHNESS_ALLOWANCE","String",null,"Roughness","schema"],["TOP_ROUGHNESS_DIRECTION_OF_LAY","String",null,"Roughness","schema"],["TOP_ROUGHNESS_MATERIAL_REMOVAL","String",null,"Roughness","schema"],["TOP_ROUGHNESS_MODIFIER","String",null,"Roughness","schema"],["TOP_ROUGHNESS_PROCESS","String",null,"Roughness","schema"],["TOP_ROUGHNESS_ROUGHNESS_CUTOFF","String",null,"Roughness","schema"],["TOP_ROUGHNESS_ROUGHNESS_MIN","String",null,"Roughness","schema"],["TOP_ROUGHNESS_ROUGHNESS_SPACING","String",null,"Roughness","schema"],["TOP_ROUGHNESS_ROUGHNESS_VALUE","String",null,"Roughness","schema"],["TOP_ROUGHNESS_STANDARD","String",null,"Roughness","schema"],["TOP_ROUGHNESS_WAVINESS","String",null,"Roughness","schema"],["WIDTH","Double","Length","Toleranced","schema"],["WIDTH_1","Double","Length","Toleranced","schema"],["WIDTH_1_LOWER","Double","Length","Toleranced","schema"],["WIDTH_1_UPPER","Double","Length","Toleranced","schema"],["WIDTH_2","Double","Length","Toleranced","schema"],["WIDTH_2_LOWER","Double","Length","Toleranced","schema"],["WIDTH_2_UPPER","Double","Length","Toleranced","schema"],["WIDTH_LOWER","Double","Length","Toleranced","schema"],["WIDTH_UPPER","Double","Length","Toleranced","schema"],["X_ORIENTATION_D","Double",null,null,"runtime"],["X_ORIENTATION_L","Double",null,null,"runtime"],["X_POSITION","Double","Length",null,"runtime"],["Y_ORIENTATION_D","Double",null,null,"runtime"],["Y_ORIENTATION_L","Double",null,null,"runtime"],["Y_POSITION","Double","Length",null,"runtime"],["Z_ORIENTATION_D","Double",null,null,"runtime"],["Z_ORIENTATION_L","Double",null,null,"runtime"],["Z_POSITION","Double","Length",null,"runtime"]];
+const C = [
+ ["BOSSES","ParametricFeature",1,0,[6,14,108,127,134,135,146,174,189,190,197,232,240,272,345,346,347,348,349,350,351,352,353,354,355,360,361,385,386,387,388,389,390,391,392,393,394,395,396,397]],
+ ["BOSS_RECTANGULAR_STRAIGHT","BOSSES",0,"Boss Rectangular Straight",[206,207,208,398,405,406]],
+ ["BOSS_ROUND_STRAIGHT","BOSSES",0,"Boss Round Straight",[147,166,167,182,363]],
+ ["BOSS_ROUND_STRAIGHT_THREAD","BOSS_ROUND_STRAIGHT",0,"Boss Round Straight Thread",[364,365,366,367,368,369,370,371,372,373,374,375,376,377,378,379,380,381]],
+ ["CORNER_NOTCHES","ParametricFeature",1,0,[359,361]],
+ ["CORNER_NOTCH_RECTANGULAR","CORNER_NOTCHES",0,"Corner Notch Rectangular",[29,90,91,92,93,94,95,96,97,98,99,100,108,134,146,206,207,208,231,239,247,272,345,346,347,348,349,350,351,352,353,354,355,398,405,406]],
+ ["CORNER_NOTCH_ROUND_CONCAVE","CORNER_NOTCHES",0,"Corner Notch Round Concave",[29,90,91,92,93,94,95,96,97,98,99,100,108,134,146,206,207,208,231,239,247,272,345,346,347,348,349,350,351,352,353,354,355,398,405,406]],
+ ["CORNER_NOTCH_STRAIGHT","CORNER_NOTCHES",0,"Corner Notch Straight",[29,90,91,92,93,94,95,96,97,98,99,100,108,134,146,188,197,206,207,208,272,345,346,347,348,349,350,351,352,353,354,355,398,405,406]],
+ ["CORNER_NOTCH_U_SHAPED","CORNER_NOTCHES",0,"Corner Notch U Shaped",[29,90,91,92,93,94,95,96,97,98,99,100,108,134,146,206,207,208,231,239,247,272,345,346,347,348,349,350,351,352,353,354,355,398,405,406]],
+ ["DrillMillFeature","MachiningFeature",1,0,[]],
+ ["GROOVES","ParametricFeature",1,0,[359,361]],
+ ["GROOVE_AX_CIRCULAR_RECT","GROOVES",0,"Groove Ax Circular Rect",[15,16,23,27,28,29,90,91,92,93,94,95,96,97,98,99,100,108,134,136,137,138,139,140,141,146,147,166,167,168,182,272,345,346,347,348,349,350,351,352,353,354,355,398,405,406]],
+ ["GROOVE_INS_RAD_RECT","GROOVES",0,"Groove Ins Rad Rect",[15,16,23,27,28,29,90,91,92,93,94,95,96,97,98,99,100,108,134,136,137,138,139,140,141,146,147,166,167,206,207,208,272,345,346,347,348,349,350,351,352,353,354,355]],
+ ["HOLES","ParametricFeature",1,0,[101,108,134,146,361,382,383]],
+ ["HOLE_FREE_SHAPED_STRAIGHT","HOLES",0,"Pocket Free Shaped Through",[22,203,204,205,212,213,214,220,221,222,225,272,345,346,347,348,349,350,351,352,353,354,355]],
+ ["HOLE_OBROUND_CURVED_STRAIGHT","HOLES",0,"Pocket Curved Through",[104,105,106,107,127,135,174,190,197,231,239,247,272,345,346,347,348,349,350,351,352,353,354,355]],
+ ["HOLE_OBROUND_STRAIGHT","HOLES",0,"Pocket Rounded Through",[6,14,127,135,174,182,183,190,206,207,208,231,239,247,272,345,346,347,348,349,350,351,352,353,354,355]],
+ ["HOLE_RECTANGULAR_STRAIGHT","HOLES",0,"Rectangular Pocket Through",[206,207,208,231,239,247,272,345,346,347,348,349,350,351,352,353,354,355,398,405,406]],
+ ["HOLE_ROUND_INTERRUPTED_STRAIGHT","HOLES",0,"Circular Pocket Interrupted Through",[147,166,167,182,199,384]],
+ ["HOLE_ROUND_TAPERED","HOLES",0,"Circular Pocket Tapered Through",[148,149,150,151,152,153,182,272,345,346,347,348,349,350,351,352,353,354,355]],
+ ["MachiningFeature",null,1,"MachiningFeatures",[102,103,198,210,219,362,407,408,409,410,411,412,413,414,415]],
+ ["POCKETS","ParametricFeature",1,0,[101,359,361,383]],
+ ["POCKET_CLOSED","POCKETS",0,"Pocket Closed",[14,22,23,27,28,29,90,91,92,93,94,95,96,97,98,99,100,108,134,135,146,181,188,190,197,211,212,213,214,215,224,225,272,345,346,347,348,349,350,351,352,353,354,355]],
+ ["POCKET_FREE_SHAPED_STRAIGHT","POCKETS",0,"Pocket Free Shaped",[14,22,23,27,28,29,90,91,92,93,94,95,96,97,98,99,100,108,134,135,146,181,188,190,197,203,204,205,212,213,214,220,221,222,272,345,346,347,348,349,350,351,352,353,354,355]],
+ ["POCKET_OBROUND_CURVED_STRAIGHT","POCKETS",0,"Pocket Curved",[14,23,27,28,29,90,91,92,93,94,95,96,97,98,99,100,104,105,106,107,108,127,134,135,146,181,188,190,197,231,239,247,272,345,346,347,348,349,350,351,352,353,354,355]],
+ ["POCKET_OBROUND_STRAIGHT","POCKETS",0,"Pocket Rounded",[14,23,27,28,29,90,91,92,93,94,95,96,97,98,99,100,108,134,135,146,181,182,183,188,190,197,206,207,208,231,239,247,272,345,346,347,348,349,350,351,352,353,354,355]],
+ ["POCKET_OPEN","POCKETS",0,"Pocket Open",[14,22,23,27,28,29,90,91,92,93,94,95,96,97,98,99,100,108,134,135,146,181,188,190,197,211,212,213,214,215,272,345,346,347,348,349,350,351,352,353,354,355]],
+ ["POCKET_RECTANGULAR_STRAIGHT","POCKETS",0,"Rectangular Pocket",[14,23,27,28,29,90,91,92,93,94,95,96,97,98,99,100,108,134,135,146,181,182,183,184,185,188,190,197,206,207,208,224,225,231,239,247,272,345,346,347,348,349,350,351,352,353,354,355,398,405,406]],
+ ["POCKET_ROUND_TAPERED","POCKETS",0,"Circular Pocket Tapered",[29,90,91,92,93,94,95,96,97,98,99,100,108,134,146,148,149,150,151,152,153,182,272,345,346,347,348,349,350,351,352,353,354,355]],
+ ["ParametricFeature","DrillMillFeature",1,0,[]],
+ ["SIDE_NOTCHES","ParametricFeature",1,0,[361]],
+ ["SIDE_NOTCH_RECTANGULAR","SIDE_NOTCHES",0,"Side Notch Rectangular",[108,134,146,206,207,208,231,239,247,272,345,346,347,348,349,350,351,352,353,354,355,398,405,406]],
+ ["SIDE_NOTCH_ROUND_CONCAVE","SIDE_NOTCHES",0,"Side Notch Round Concave",[108,134,146,206,207,208,231,239,247,272,345,346,347,348,349,350,351,352,353,354,355,398,405,406]],
+ ["SIDE_NOTCH_U_SHAPED","SIDE_NOTCHES",0,"Side Notch U Shaped",[108,134,146,206,207,208,231,239,247,272,345,346,347,348,349,350,351,352,353,354,355,398,405,406]],
+ ["SLOTS","ParametricFeature",1,0,[]],
+ ["SLOT_90_DEGREE","SLOTS",0,"Slot 90 Degree",[108,134,146,206,207,208,223,224,225,272,345,346,347,348,349,350,351,352,353,354,355,361,398,405,406]],
+ ["SLOT_DOVE_TAIL","SLOTS",0,"Slot Dove Tail",[0,13,21,29,90,91,92,93,94,95,96,97,98,99,100,108,134,146,188,197,206,207,208,272,345,346,347,348,349,350,351,352,353,354,355,359,361,399,400,401,402,403,404]],
+ ["SLOT_OBROUND","SLOTS",0,"Slot Obround",[29,90,91,92,93,94,95,96,97,98,99,100,108,134,146,206,207,208,231,239,247,272,345,346,347,348,349,350,351,352,353,354,355,359,361,398,405,406]],
+ ["SLOT_PARTIAL_OBROUND","SLOTS",0,"Slot Partial Obround",[23,29,90,91,92,93,94,95,96,97,98,99,100,108,134,146,181,188,197,206,207,208,231,239,247,272,345,346,347,348,349,350,351,352,353,354,355,359,361,398,405,406]],
+ ["SLOT_PARTIAL_RECTANGULAR","SLOTS",0,"Slot Partial Rectangular",[23,29,90,91,92,93,94,95,96,97,98,99,100,108,134,146,181,188,197,206,207,208,231,239,247,272,345,346,347,348,349,350,351,352,353,354,355,359,361,398,405,406]],
+ ["SLOT_PARTIAL_ROUND","SLOTS",0,"Slot Partial Round",[23,29,90,91,92,93,94,95,96,97,98,99,100,108,134,146,168,182,231,239,247,272,345,346,347,348,349,350,351,352,353,354,355,359,361,398,405,406]],
+ ["SLOT_PARTIAL_U_SHAPED","SLOTS",0,"Slot Partial U Shaped",[23,27,28,29,90,91,92,93,94,95,96,97,98,99,100,108,134,146,181,188,197,231,239,247,272,345,346,347,348,349,350,351,352,353,354,355,359,361,398,405,406]],
+ ["SLOT_RECTANGULAR","SLOTS",0,"Slot Rectangular",[29,90,91,92,93,94,95,96,97,98,99,100,108,134,146,181,188,197,206,207,208,223,224,225,231,239,247,272,345,346,347,348,349,350,351,352,353,354,355,359,361,398,405,406]],
+ ["SLOT_ROUND","SLOTS",0,"Slot Round",[29,90,91,92,93,94,95,96,97,98,99,100,108,134,146,206,207,208,231,239,247,272,345,346,347,348,349,350,351,352,353,354,355,359]],
+ ["SLOT_T_SHAPED","SLOTS",0,"Slot T Shaped",[29,90,91,92,93,94,95,96,97,98,99,100,109,110,111,112,113,114,206,207,208,248,249,250,251,252,253,254,255,256,257,258,259,260,261,262,263,264,265,266,267,268,269,270,271,359,386,387,388,389,390,391,392,393,394,395,396,397,399,400,401,402,403,404]],
+ ["SLOT_UPSIDE_DOWN_DOVE_TAIL","SLOTS",0,"Slot Upside Down Dove Tail",[0,13,21,23,29,90,91,92,93,94,95,96,97,98,99,100,108,134,146,181,188,197,206,207,208,272,345,346,347,348,349,350,351,352,353,354,355,359,361,398,405,406]],
+ ["SLOT_U_SHAPED","SLOTS",0,"Slot U Shaped",[29,90,91,92,93,94,95,96,97,98,99,100,108,134,146,206,207,208,223,224,225,231,239,247,272,345,346,347,348,349,350,351,352,353,354,355,359,361]],
+ ["SLOT_V_SHAPED","SLOTS",0,"Slot V Shaped",[0,13,21,108,134,146,206,207,208,272,345,346,347,348,349,350,351,352,353,354,355,361,398,405,406]],
+ ["STEP","ParametricFeature",1,0,[101,383]],
+ ["STEP1HOLE","STEP",0,"Through Hole",[6,7,14,15,108,127,128,134,135,136,146,148,149,150,174,175,182,190,191,209,216,217,218,226,227,232,233,240,241,273,274,275,276,277,278,279,280,281,282,283,284,382]],
+ ["STEP1HOLE_THREAD","STEP1HOLE",0,"Threaded Through Hole",[364,365,366,367,368,369,370,371,372,373,374,375,376,377,378,379,380,381]],
+ ["STEP1POCKET","STEP",0,"Blind Hole",[7,14,15,29,90,91,92,93,94,95,96,97,98,99,100,108,109,110,111,128,134,135,136,146,148,149,150,168,175,182,190,191,209,216,217,218,226,227,233,240,241,273,274,275,276,277,278,279,280,281,282,283,284]],
+ ["STEP1POCKET_THREAD","STEP1POCKET",0,"Threaded Blind Hole",[364,365,366,367,368,369,370,371,372,373,374,375,376,377,378,379,380,381]],
+ ["STEP2HOLE","STEP1HOLE",0,"Counter Bore Through Hole",[1,8,16,30,31,32,33,34,35,36,37,38,39,40,41,109,110,111,129,139,151,152,153,169,176,183,192,209,216,217,218,226,227,234,242,285,286,287,288,289,290,291,292,293,294,295,296]],
+ ["STEP2HOLE_THREAD","STEP2HOLE",0,"Threaded Counter Bore Through Hole",[364,365,366,367,368,369,370,371,372,373,374,375,376,377,378,379,380,381]],
+ ["STEP2POCKET","STEP1POCKET",0,"Counter Bore Blind Hole",[1,8,16,30,31,32,33,34,35,36,37,38,39,40,41,112,113,114,129,139,151,152,153,169,176,183,192,209,216,217,218,226,227,234,242,285,286,287,288,289,290,291,292,293,294,295,296]],
+ ["STEP2POCKET_THREAD","STEP2POCKET",0,"Threaded Counter Bore Blind Hole",[364,365,366,367,368,369,370,371,372,373,374,375,376,377,378,379,380,381]],
+ ["STEP3HOLE","STEP2HOLE",0,"Multi-Step (3) Through Hole",[2,9,17,42,43,44,45,46,47,48,49,50,51,52,53,112,113,114,130,142,154,155,156,170,177,184,193,235,243,297,298,299,300,301,302,303,304,305,306,307,308]],
+ ["STEP3HOLE1","STEP2HOLE",0,"Multi-Step (3) Through Hole (1)",[2,9,17,42,43,44,45,46,47,48,49,50,51,52,53,112,113,114,130,142,154,155,156,170,177,184,193,209,216,217,218,226,227,235,243,297,298,299,300,301,302,303,304,305,306,307,308]],
+ ["STEP3HOLE1_THREAD","STEP3HOLE1",0,"Threaded Multi-Step (3) Through Hole (1)",[364,365,366,367,368,369,370,371,372,373,374,375,376,377,378,379,380,381]],
+ ["STEP3HOLE_THREAD","STEP3HOLE",0,"Threaded Multi-Step (3) Through Hole",[364,365,366,367,368,369,370,371,372,373,374,375,376,377,378,379,380,381]],
+ ["STEP3POCKET","STEP2POCKET",0,"Multi-Step (3) Blind Hole",[2,9,17,42,43,44,45,46,47,48,49,50,51,52,53,115,116,117,130,142,154,155,156,170,177,184,193,209,216,217,218,226,227,235,243,297,298,299,300,301,302,303,304,305,306,307,308]],
+ ["STEP3POCKET_THREAD","STEP3POCKET",0,"Threaded Multi-Step (3) Blind Hole",[364,365,366,367,368,369,370,371,372,373,374,375,376,377,378,379,380,381]],
+ ["STEP4HOLE","STEP3HOLE",0,"Multi-Step (4) Through Hole",[3,10,18,54,55,56,57,58,59,60,61,62,63,64,65,115,116,117,131,143,157,158,159,171,178,185,194,236,244,309,310,311,312,313,314,315,316,317,318,319,320]],
+ ["STEP4HOLE1","STEP3HOLE",0,"Multi-Step (4) Through Hole (1)",[3,10,18,54,55,56,57,58,59,60,61,62,63,64,65,115,116,117,131,143,157,158,159,171,178,185,194,236,244,309,310,311,312,313,314,315,316,317,318,319,320]],
+ ["STEP4HOLE1_THREAD","STEP4HOLE1",0,"Threaded Multi-Step (4) Through Hole (1)",[364,365,366,367,368,369,370,371,372,373,374,375,376,377,378,379,380,381]],
+ ["STEP4HOLE_THREAD","STEP4HOLE",0,"Threaded Multi-Step (4) Through Hole",[364,365,366,367,368,369,370,371,372,373,374,375,376,377,378,379,380,381]],
+ ["STEP4POCKET","STEP3POCKET",0,"Multi-Step (4) Blind Hole",[3,10,18,54,55,56,57,58,59,60,61,62,63,64,65,118,119,120,131,143,157,158,159,171,178,185,194,236,244,309,310,311,312,313,314,315,316,317,318,319,320]],
+ ["STEP4POCKET_THREAD","STEP4POCKET",0,"Threaded Multi-Step (4) Blind Hole",[364,365,366,367,368,369,370,371,372,373,374,375,376,377,378,379,380,381]],
+ ["STEP5HOLE","STEP4HOLE",0,"Multi-Step (5) Through Hole",[4,11,19,66,67,68,69,70,71,72,73,74,75,76,77,118,119,120,132,144,160,161,162,172,179,186,195,209,216,217,218,226,227,237,245,321,322,323,324,325,326,327,328,329,330,331,332]],
+ ["STEP5HOLE1","STEP4HOLE",0,"Multi-Step (5) Through Hole (1)",[4,11,19,66,67,68,69,70,71,72,73,74,75,76,77,118,119,120,132,144,160,161,162,172,179,186,195,237,245,321,322,323,324,325,326,327,328,329,330,331,332]],
+ ["STEP5HOLE1_THREAD","STEP5HOLE1",0,"Threaded Multi-Step (5) Through Hole (1)",[364,365,366,367,368,369,370,371,372,373,374,375,376,377,378,379,380,381]],
+ ["STEP5HOLE2","STEP4HOLE",0,"Multi-Step (5) Through Hole (2)",[4,11,19,66,67,68,69,70,71,72,73,74,75,76,77,118,119,120,132,144,160,161,162,172,179,186,195,237,245,321,322,323,324,325,326,327,328,329,330,331,332]],
+ ["STEP5HOLE2_THREAD","STEP5HOLE2",0,"Threaded Multi-Step (5) Through Hole (2)",[364,365,366,367,368,369,370,371,372,373,374,375,376,377,378,379,380,381]],
+ ["STEP5HOLE_THREAD","STEP5HOLE",0,"Threaded Multi-Step (5) Through Hole",[364,365,366,367,368,369,370,371,372,373,374,375,376,377,378,379,380,381]],
+ ["STEP5POCKET","STEP4POCKET",0,"Multi-Step (5) Blind Hole",[4,11,19,66,67,68,69,70,71,72,73,74,75,76,77,121,122,123,132,144,160,161,162,172,179,186,195,237,245,321,322,323,324,325,326,327,328,329,330,331,332]],
+ ["STEP5POCKET_THREAD","STEP5POCKET",0,"Threaded Multi-Step (5) Blind Hole",[364,365,366,367,368,369,370,371,372,373,374,375,376,377,378,379,380,381]],
+ ["STEP6HOLE","STEP5HOLE",0,"Multi-Step (6) Through Hole",[5,12,20,78,79,80,81,82,83,84,85,86,87,88,89,121,122,123,133,145,163,164,165,173,180,187,196,238,246,333,334,335,336,337,338,339,340,341,342,343,344]],
+ ["STEP6HOLE1","STEP5HOLE",0,"Multi-Step (6) Through Hole (1)",[5,12,20,78,79,80,81,82,83,84,85,86,87,88,89,121,122,123,133,145,163,164,165,173,180,187,196,238,246,333,334,335,336,337,338,339,340,341,342,343,344]],
+ ["STEP6HOLE1_THREAD","STEP6HOLE1",0,"Threaded Multi-Step (6) Through Hole (1)",[364,365,366,367,368,369,370,371,372,373,374,375,376,377,378,379,380,381]],
+ ["STEP6HOLE2","STEP5HOLE",0,"Multi-Step (6) Through Hole (2)",[5,12,20,78,79,80,81,82,83,84,85,86,87,88,89,121,122,123,133,145,163,164,165,173,180,187,196,238,246,333,334,335,336,337,338,339,340,341,342,343,344]],
+ ["STEP6HOLE2_THREAD","STEP6HOLE2",0,"Threaded Multi-Step (6) Through Hole (2)",[364,365,366,367,368,369,370,371,372,373,374,375,376,377,378,379,380,381]],
+ ["STEP6HOLE_THREAD","STEP6HOLE",0,"Threaded Multi-Step (6) Through Hole",[364,365,366,367,368,369,370,371,372,373,374,375,376,377,378,379,380,381]],
+ ["STEP6POCKET","STEP5POCKET",0,"Multi-Step (6) Blind Hole",[5,12,20,78,79,80,81,82,83,84,85,86,87,88,89,124,125,126,133,145,163,164,165,173,180,187,196,209,216,217,218,226,227,238,246,333,334,335,336,337,338,339,340,341,342,343,344]],
+ ["STEP6POCKET_THREAD","STEP6POCKET",0,"Threaded Multi-Step (6) Blind Hole",[364,365,366,367,368,369,370,371,372,373,374,375,376,377,378,379,380,381]],
+ ["SURFACES","ParametricFeature",1,0,[188,359]],
+ ["SURFACE_PLANAR","SURFACES",0,"Surface Planar",[108,134,146,206,207,208,223,224,386,387,388,389,390,391,392,393,394,395,396,397,398,405,406]],
+ ["SURFACE_PLANAR_RECTANGULAR","SURFACES",0,"Surface Planar Rectangular",[108,134,146,206,207,208,223,224,386,387,388,389,390,391,392,393,394,395,396,397,398,405,406]],
+ ["SURFACE_PLANAR_ROUND","SURFACES",0,"Surface Planar Round",[108,134,146,223,224,231,239,247,386,387,388,389,390,391,392,393,394,395,396,397]],
+ ["TURNING_GROOVE","TurningFeature",0,"Turning Groove",[23,24,25,26,27,28]],
+ ["TURNING_GROOVE_FACE","TURNING_GROOVE",0,"Turning Groove Face",[15,16,29,90,91,92,93,94,95,96,97,98,99,100,108,134,136,139,146,200,201,202,228,229,230,272,345,346,347,348,349,350,351,352,353,354,355]],
+ ["TURNING_GROOVE_ID","TURNING_GROOVE",0,"Turning Groove ID",[15,16,29,90,91,92,93,94,95,96,97,98,99,100,136,139,200,201,202,206,207,208,228,229,230,272,345,346,347,348,349,350,351,352,353,354,355]],
+ ["TURNING_GROOVE_OD","TURNING_GROOVE",0,"Turning Groove OD",[15,16,29,90,91,92,93,94,95,96,97,98,99,100,136,139,200,201,202,206,207,208,228,229,230,272,345,346,347,348,349,350,351,352,353,354,355]],
+ ["TurningFeature","MachiningFeature",1,0,[]],
+ ["WEDM_FREE_SHAPED_STRAIGHT","WedmFeature",0,"Wedm Free Shaped Straight",[22,108,134,146,182,203,204,205,212,213,214,220,221,222,272,345,346,347,348,349,350,351,352,353,354,355,356,357,358]],
+ ["WEDM_OBROUND_STRAIGHT","WedmFeature",0,"Wedm Obround Straight",[108,134,146,182,183,206,207,208,231,239,247,272,345,346,347,348,349,350,351,352,353,354,355,356,357,358]],
+ ["WEDM_RECTANGULAR_STRAIGHT","WedmFeature",0,"Wedm Rectangular Straight",[108,134,146,182,183,184,185,206,207,208,231,239,247,272,345,346,347,348,349,350,351,352,353,354,355,356,357,358,398,405,406]],
+ ["WEDM_ROUND_STRAIGHT","WedmFeature",0,"Wedm Round Straight",[108,134,146,147,166,167,182,272,345,346,347,348,349,350,351,352,353,354,355,356,357,358]],
+ ["WedmFeature","MachiningFeature",1,0,[]]
+];
+const R = {"families":[["STEP",["STEP1HOLE","STEP1HOLE_THREAD","STEP1POCKET","STEP1POCKET_THREAD","STEP2HOLE","STEP2HOLE_THREAD","STEP2POCKET","STEP2POCKET_THREAD","STEP3HOLE","STEP3HOLE1","STEP3HOLE1_THREAD","STEP3HOLE_THREAD","STEP3POCKET","STEP3POCKET_THREAD","STEP4HOLE","STEP4HOLE1","STEP4HOLE1_THREAD","STEP4HOLE_THREAD","STEP4POCKET","STEP4POCKET_THREAD","STEP5HOLE","STEP5HOLE1","STEP5HOLE1_THREAD","STEP5HOLE2","STEP5HOLE2_THREAD","STEP5HOLE_THREAD","STEP5POCKET","STEP5POCKET_THREAD","STEP6HOLE","STEP6HOLE1","STEP6HOLE1_THREAD","STEP6HOLE2","STEP6HOLE2_THREAD","STEP6HOLE_THREAD","STEP6POCKET","STEP6POCKET_THREAD"],0],["SLOTS",["SLOT_90_DEGREE","SLOT_DOVE_TAIL","SLOT_OBROUND","SLOT_PARTIAL_OBROUND","SLOT_PARTIAL_RECTANGULAR","SLOT_PARTIAL_ROUND","SLOT_PARTIAL_U_SHAPED","SLOT_RECTANGULAR","SLOT_ROUND","SLOT_T_SHAPED","SLOT_UPSIDE_DOWN_DOVE_TAIL","SLOT_U_SHAPED","SLOT_V_SHAPED"],0],["POCKETS",["POCKET_CLOSED","POCKET_FREE_SHAPED_STRAIGHT","POCKET_OBROUND_CURVED_STRAIGHT","POCKET_OBROUND_STRAIGHT","POCKET_OPEN","POCKET_RECTANGULAR_STRAIGHT","POCKET_ROUND_TAPERED"],0],["HOLES",["HOLE_FREE_SHAPED_STRAIGHT","HOLE_OBROUND_CURVED_STRAIGHT","HOLE_OBROUND_STRAIGHT","HOLE_RECTANGULAR_STRAIGHT","HOLE_ROUND_INTERRUPTED_STRAIGHT","HOLE_ROUND_TAPERED"],0],["CORNER_NOTCHES",["CORNER_NOTCH_RECTANGULAR","CORNER_NOTCH_ROUND_CONCAVE","CORNER_NOTCH_STRAIGHT","CORNER_NOTCH_U_SHAPED"],0],["WedmFeature",["WEDM_FREE_SHAPED_STRAIGHT","WEDM_OBROUND_STRAIGHT","WEDM_RECTANGULAR_STRAIGHT","WEDM_ROUND_STRAIGHT"],0],["BOSSES",["BOSS_RECTANGULAR_STRAIGHT","BOSS_ROUND_STRAIGHT","BOSS_ROUND_STRAIGHT_THREAD"],0],["SIDE_NOTCHES",["SIDE_NOTCH_RECTANGULAR","SIDE_NOTCH_ROUND_CONCAVE","SIDE_NOTCH_U_SHAPED"],0],["SURFACES",["SURFACE_PLANAR","SURFACE_PLANAR_RECTANGULAR","SURFACE_PLANAR_ROUND"],0],["TurningFeature",["TURNING_GROOVE_FACE","TURNING_GROOVE_ID","TURNING_GROOVE_OD"],0],["GROOVES",["GROOVE_AX_CIRCULAR_RECT","GROOVE_INS_RAD_RECT"],0]],"types":[{"id":"COAXIAL","label":"Coaxial","ab":"CX","col":"#00a6a6","dir":"undirected","gov":"hole classes (STEP / HOLES) with each other, and hole classes with circular bosses","prop":"—","def":"The <b>feature axes of the two features lie on one infinite line</b>, within the frozen angular and offset tolerances.","when":["both ends carry <code>X/Y/Z_POSITION</code> and <code>X/Y/Z_ORIENTATION_D</code> - NX publishes them on every feature","the two axes are parallel","the distance between the two infinite axes is within tolerance"],"pairs":["BOSSES|BOSSES","BOSSES|HOLES","BOSSES|STEP","HOLES|BOSSES","HOLES|HOLES","HOLES|STEP","STEP|BOSSES","STEP|HOLES","STEP|STEP"]},{"id":"HOLE_SPACING","label":"Hole spacing","ab":"HS","col":"#0077b6","dir":"undirected","gov":"hole classes (STEP / HOLES) with each other","prop":"axisSpacing (mm)","def":"<b>Perpendicular offset between the axes</b> of two hole-like features.","when":["the same set of NX attributes as COAXIAL","the perpendicular distance between the two axes is taken","a coaxial pair of holes does not hold"],"pairs":["HOLES|HOLES","HOLES|STEP","STEP|HOLES","STEP|STEP"]},{"id":"LOCATED_ON","label":"Located on","ab":"LO","col":"#e6a700","dir":"undirected in the graph, directed in the evidence","gov":"source is a terminal-carrying pocket / hole / boss / slot / notch / groove; host is any final node","prop":"terminals (hostSurfaceType / hostSurfaceNormal)","def":"A semantic terminal of the source feature resolves outward and <b>lands on exactly one effective host face</b>, together with the feature that owns that face.","when":["an NX-side terminal resolver is needed: the open-source one is tied to v5.1 leaf semantics (the conical section of a Countersink, diagnostic keys such as <code>sectionFaceId</code>) and <b>cannot be reused</b>","what can be reused is the purely topological layer beneath it, <code>wall_rims</code> / <code>classify_rim_end</code> - those two take only a PartModel and one face id","the effective host of the terminal must be unique, or it does not hold"],"pairs":["BOSSES|BOSSES","BOSSES|CORNER_NOTCHES","BOSSES|GROOVES","BOSSES|HOLES","BOSSES|POCKETS","BOSSES|SIDE_NOTCHES","BOSSES|SLOTS","BOSSES|STEP","BOSSES|SURFACES","BOSSES|TurningFeature","BOSSES|WedmFeature","CORNER_NOTCHES|BOSSES","CORNER_NOTCHES|CORNER_NOTCHES","CORNER_NOTCHES|GROOVES","CORNER_NOTCHES|HOLES","CORNER_NOTCHES|POCKETS","CORNER_NOTCHES|SIDE_NOTCHES","CORNER_NOTCHES|SLOTS","CORNER_NOTCHES|STEP","CORNER_NOTCHES|SURFACES","CORNER_NOTCHES|TurningFeature","CORNER_NOTCHES|WedmFeature","GROOVES|BOSSES","GROOVES|CORNER_NOTCHES","GROOVES|GROOVES","GROOVES|HOLES","GROOVES|POCKETS","GROOVES|SIDE_NOTCHES","GROOVES|SLOTS","GROOVES|STEP","GROOVES|SURFACES","GROOVES|TurningFeature","GROOVES|WedmFeature","HOLES|BOSSES","HOLES|CORNER_NOTCHES","HOLES|GROOVES","HOLES|HOLES","HOLES|POCKETS","HOLES|SIDE_NOTCHES","HOLES|SLOTS","HOLES|STEP","HOLES|SURFACES","HOLES|TurningFeature","HOLES|WedmFeature","POCKETS|BOSSES","POCKETS|CORNER_NOTCHES","POCKETS|GROOVES","POCKETS|HOLES","POCKETS|POCKETS","POCKETS|SIDE_NOTCHES","POCKETS|SLOTS","POCKETS|STEP","POCKETS|SURFACES","POCKETS|TurningFeature","POCKETS|WedmFeature","SIDE_NOTCHES|BOSSES","SIDE_NOTCHES|CORNER_NOTCHES","SIDE_NOTCHES|GROOVES","SIDE_NOTCHES|HOLES","SIDE_NOTCHES|POCKETS","SIDE_NOTCHES|SIDE_NOTCHES","SIDE_NOTCHES|SLOTS","SIDE_NOTCHES|STEP","SIDE_NOTCHES|SURFACES","SIDE_NOTCHES|TurningFeature","SIDE_NOTCHES|WedmFeature","SLOTS|BOSSES","SLOTS|CORNER_NOTCHES","SLOTS|GROOVES","SLOTS|HOLES","SLOTS|POCKETS","SLOTS|SIDE_NOTCHES","SLOTS|SLOTS","SLOTS|STEP","SLOTS|SURFACES","SLOTS|TurningFeature","SLOTS|WedmFeature","STEP|BOSSES","STEP|CORNER_NOTCHES","STEP|GROOVES","STEP|HOLES","STEP|POCKETS","STEP|SIDE_NOTCHES","STEP|SLOTS","STEP|STEP","STEP|SURFACES","STEP|TurningFeature","STEP|WedmFeature","SURFACES|BOSSES","SURFACES|CORNER_NOTCHES","SURFACES|GROOVES","SURFACES|HOLES","SURFACES|POCKETS","SURFACES|SIDE_NOTCHES","SURFACES|SLOTS","SURFACES|STEP","TurningFeature|BOSSES","TurningFeature|CORNER_NOTCHES","TurningFeature|GROOVES","TurningFeature|HOLES","TurningFeature|POCKETS","TurningFeature|SIDE_NOTCHES","TurningFeature|SLOTS","TurningFeature|STEP","WedmFeature|BOSSES","WedmFeature|CORNER_NOTCHES","WedmFeature|GROOVES","WedmFeature|HOLES","WedmFeature|POCKETS","WedmFeature|SIDE_NOTCHES","WedmFeature|SLOTS","WedmFeature|STEP"]},{"id":"INTERSECTS","label":"Intersects","ab":"IX","col":"#d1495b","dir":"undirected","gov":"hole classes (STEP / HOLES) with each other","prop":"crossingAngle (degrees)","def":"The <b>removal volumes of two hole-like features meet</b>; the relation property is their crossing angle.","when":["the PartModel topology gives a shared edge between the principal walls of the two ends","the two axes are not parallel"],"pairs":["HOLES|HOLES","HOLES|STEP","STEP|HOLES","STEP|STEP"]},{"id":"POCKET_CLEARANCE","label":"Pocket clearance","ab":"PC","col":"#7b2cbf","dir":"undirected","gov":"the POCKETS family with itself","prop":"pocketClearance (mm)","def":"<b>Shortest remaining material distance</b> between the side walls of two pockets.","when":["measured by <code>KernelServices</code>; no NX attribute can answer it","the side wall face sets of the two ends are <b>disjoint</b>: a distance of 0 is contact rather than clearance, and produces no edge","it has to be measured in a session with the part open, which is why it belongs to 20'b"],"pairs":["POCKETS|POCKETS"]},{"id":"SLOT_CLEARANCE","label":"Slot clearance","ab":"SC","col":"#2a9d8f","dir":"undirected","gov":"the SLOTS family with itself","prop":"slotClearance (mm)","def":"<b>Shortest distance between the opening boundaries</b> of two slots.","when":["the opening boundary = the loop of edges where the owned faces stop (the same boundary walk as LOCATED_ON)","the shortest distance between the two boundary polylines is taken - the same measurement basis as <code>cnc:SLOT_CLEARANCE</code>","the two boundaries are <b>disjoint</b>: a distance of 0 is contact rather than clearance, and produces no edge"],"pairs":["SLOTS|SLOTS"]}],"props":[{"name":"axisSpacing","label":"axis spacing","on":"HOLE_SPACING","range":"xsd:decimal","unit":"Length","def":"Perpendicular distance between the two feature axes."},{"name":"pocketClearance","label":"pocket clearance","on":"POCKET_CLEARANCE","range":"xsd:decimal","unit":"Length","def":"Shortest remaining material distance between the side wall face sets of the two pockets, measured only where the two sets are separated."},{"name":"slotClearance","label":"slot clearance","on":"SLOT_CLEARANCE","range":"xsd:decimal","unit":"Length","def":"Shortest distance between the two slots' opening boundaries, measured only where the two boundaries are separated."},{"name":"crossingAngle","label":"crossing angle","on":"INTERSECTS","range":"xsd:decimal","unit":"Angle","def":"Angle between the two removal axes where the volumes meet."},{"name":"terminals","label":"terminals","on":"LOCATED_ON","range":"nx:LocatedOnTerminal","unit":null,"def":"The resolved terminals of the source feature, one record per terminal. A list rather than a scalar because a feature can sit on more than one host face."}],"terminal":{"class":"LocatedOnTerminal","label":"Located-on terminal record","def":"One resolved terminal of a feature: the effective host face it opens onto, described by the two properties a rule can currently ask about.","fields":[{"name":"hostSurfaceType","label":"host surface type","range":"xsd:string","def":"The surface type of the host face, from the PartModel. PLANE is the only value any rule tests today; the vocabulary is the PartModel's, not NX's."},{"name":"hostSurfaceNormal","label":"host surface normal","range":"xsd:string","def":"The outward normal of the host face at the terminal, as a three-component vector."}]},"derived":[{"name":"derived_floor_thickness","label":"derived floor thickness","range":"xsd:decimal","def":"Remaining material below the floor of a pocket-like feature, measured from the floor to the nearest opposing face of the part."},{"name":"derived_min_wall_thickness","label":"derived minimum wall thickness","range":"xsd:decimal","def":"Thinnest remaining wall between this feature's surface and the nearest other surface of the part."},{"name":"derived_min_clearance","label":"derived minimum clearance","range":"xsd:decimal","def":"Shortest distance from this feature to any other material of the part, used where a rule asks whether a tool can reach the feature at all."}]};
+const H = [
+ {"id":"H01","label":"H01 — Hole depth-to-diameter ratio","grade":"advisory","scope":"single feature","stmt":"Keep the depth-to-diameter ratio of a hole at or below 4.","cond":"forall sections k : sectionDepth(k) / DIAMETER_k <= t_hole_ld","th":"t_hole_ld = 4","ext":null,"on":["STEP*"],"classes":["STEP1HOLE","STEP1HOLE_THREAD","STEP1POCKET","STEP1POCKET_THREAD","STEP2HOLE","STEP2HOLE_THREAD","STEP2POCKET","STEP2POCKET_THREAD","STEP3HOLE","STEP3HOLE1","STEP3HOLE1_THREAD","STEP3HOLE_THREAD","STEP3POCKET","STEP3POCKET_THREAD","STEP4HOLE","STEP4HOLE1","STEP4HOLE1_THREAD","STEP4HOLE_THREAD","STEP4POCKET","STEP4POCKET_THREAD","STEP5HOLE","STEP5HOLE1","STEP5HOLE1_THREAD","STEP5HOLE2","STEP5HOLE2_THREAD","STEP5HOLE_THREAD","STEP5POCKET","STEP5POCKET_THREAD","STEP6HOLE","STEP6HOLE1","STEP6HOLE1_THREAD","STEP6HOLE2","STEP6HOLE2_THREAD","STEP6HOLE_THREAD","STEP6POCKET","STEP6POCKET_THREAD"],"rel":[]},
+ {"id":"H03","label":"H03 — Pocket depth-to-width ratio","grade":"advisory","scope":"single feature","stmt":"Keep the depth of a rectangular pocket at or below five times its most restrictive width.","cond":"DEPTH / min(WIDTH, LENGTH) <= t_pocket_ld","th":"t_pocket_ld = 5","ext":null,"on":["POCKET_RECTANGULAR_STRAIGHT"],"classes":["POCKET_RECTANGULAR_STRAIGHT"],"rel":[]},
+ {"id":"H06","label":"H06 — Minimum circular-boss diameter","grade":"advisory","scope":"single feature","stmt":"Keep the smaller of the base and top diameters of a circular boss at or above 3 mm.","cond":"DIAMETER >= t_boss_diameter","th":"t_boss_diameter = 3.0 mm","ext":null,"on":["BOSS_ROUND_STRAIGHT","BOSS_ROUND_STRAIGHT_THREAD"],"classes":["BOSS_ROUND_STRAIGHT","BOSS_ROUND_STRAIGHT_THREAD"],"rel":[]},
+ {"id":"H07","label":"H07 — Circular-boss height-to-diameter ratio","grade":"advisory","scope":"single feature","stmt":"Keep the height of a circular boss at or below four times the smaller of its base and top diameters.","cond":"DEPTH <= t_boss_hd * DIAMETER","th":"t_boss_hd = 4","ext":null,"on":["BOSS_ROUND_STRAIGHT","BOSS_ROUND_STRAIGHT_THREAD"],"classes":["BOSS_ROUND_STRAIGHT","BOSS_ROUND_STRAIGHT_THREAD"],"rel":[]},
+ {"id":"H09","label":"H09 — Uniform hole axis orientation","grade":"advisory","scope":"part-level aggregate","stmt":"Orient all holes of a part along one axis direction (distinct feature_axis directions within 0.5 degree: at most 1).","cond":"distinct((X_ORIENTATION_D, Y_ORIENTATION_D, Z_ORIENTATION_D) over STEP* in part, tol_axis) <= t_hole_axis_variety","th":"t_hole_axis_variety = 1; tol_axis = 0.5°","ext":null,"on":["STEP*"],"classes":["STEP1HOLE","STEP1HOLE_THREAD","STEP1POCKET","STEP1POCKET_THREAD","STEP2HOLE","STEP2HOLE_THREAD","STEP2POCKET","STEP2POCKET_THREAD","STEP3HOLE","STEP3HOLE1","STEP3HOLE1_THREAD","STEP3HOLE_THREAD","STEP3POCKET","STEP3POCKET_THREAD","STEP4HOLE","STEP4HOLE1","STEP4HOLE1_THREAD","STEP4HOLE_THREAD","STEP4POCKET","STEP4POCKET_THREAD","STEP5HOLE","STEP5HOLE1","STEP5HOLE1_THREAD","STEP5HOLE2","STEP5HOLE2_THREAD","STEP5HOLE_THREAD","STEP5POCKET","STEP5POCKET_THREAD","STEP6HOLE","STEP6HOLE1","STEP6HOLE1_THREAD","STEP6HOLE2","STEP6HOLE2_THREAD","STEP6HOLE_THREAD","STEP6POCKET","STEP6POCKET_THREAD"],"rel":[]},
+ {"id":"H10","label":"H10 — Minimum pocket corner radius","grade":"hard","scope":"single feature","stmt":"Use a minimum concave internal corner radius of at least 1 mm in a pocket.","cond":"MIN_RADIUS >= t_corner_radius","th":"t_corner_radius = 1.0 mm","ext":null,"on":["POCKET_CLOSED","POCKET_OPEN","POCKET_FREE_SHAPED_STRAIGHT"],"classes":["POCKET_CLOSED","POCKET_FREE_SHAPED_STRAIGHT","POCKET_OPEN"],"rel":[]},
+ {"id":"H11","label":"H11 — Minimum remaining pocket floor thickness","grade":"hard","scope":"single feature","stmt":"Keep the remaining floor thickness below a pocket at or above 2 mm.","cond":"derived_floor_thickness >= t_floor","th":"t_floor = 2.0 mm","ext":null,"on":["POCKET_*"],"classes":["POCKET_CLOSED","POCKET_FREE_SHAPED_STRAIGHT","POCKET_OBROUND_CURVED_STRAIGHT","POCKET_OBROUND_STRAIGHT","POCKET_OPEN","POCKET_RECTANGULAR_STRAIGHT","POCKET_ROUND_TAPERED"],"rel":[]},
+ {"id":"H12","label":"H12 — Minimum web between holes","grade":"hard","scope":"feature pair","stmt":"Keep the material web between two same-host parallel holes (axis spacing minus the mean of both diameters) at or above 2 mm.","cond":"HOLE_SPACING(A,B).axisSpacing - (DIAMETER_1(A) + DIAMETER_1(B)) / 2 >= t_hole_web","th":"t_hole_web = 2.0 mm","ext":null,"on":["STEP*"],"classes":["STEP1HOLE","STEP1HOLE_THREAD","STEP1POCKET","STEP1POCKET_THREAD","STEP2HOLE","STEP2HOLE_THREAD","STEP2POCKET","STEP2POCKET_THREAD","STEP3HOLE","STEP3HOLE1","STEP3HOLE1_THREAD","STEP3HOLE_THREAD","STEP3POCKET","STEP3POCKET_THREAD","STEP4HOLE","STEP4HOLE1","STEP4HOLE1_THREAD","STEP4HOLE_THREAD","STEP4POCKET","STEP4POCKET_THREAD","STEP5HOLE","STEP5HOLE1","STEP5HOLE1_THREAD","STEP5HOLE2","STEP5HOLE2_THREAD","STEP5HOLE_THREAD","STEP5POCKET","STEP5POCKET_THREAD","STEP6HOLE","STEP6HOLE1","STEP6HOLE1_THREAD","STEP6HOLE2","STEP6HOLE2_THREAD","STEP6HOLE_THREAD","STEP6POCKET","STEP6POCKET_THREAD"],"rel":["HOLE_SPACING"]},
+ {"id":"H13","label":"H13 — Hole coaxial with its boss","grade":"informational","scope":"single feature (conditional)","stmt":"If a hole is located on a circular boss, at least one hole located on that boss shall be coaxial with it.","cond":"(exists h in STEP* union HOLES : LOCATED_ON(h, B)) -> (exists h' in STEP* union HOLES : LOCATED_ON(h', B) and COAXIAL(h', B))","th":"—","ext":null,"on":["BOSS_ROUND_STRAIGHT","BOSS_ROUND_STRAIGHT_THREAD"],"classes":["BOSS_ROUND_STRAIGHT","BOSS_ROUND_STRAIGHT_THREAD"],"rel":["COAXIAL","LOCATED_ON"]},
+ {"id":"H15","label":"H15 — Minimum pocket-to-pocket clearance","grade":"hard","scope":"feature pair","stmt":"Keep at least 3 mm of side-wall clearance between two same-host pockets.","cond":"POCKET_CLEARANCE(A,B).pocketClearance >= t_pocket_gap","th":"t_pocket_gap = 3.0 mm","ext":null,"on":["POCKET_*"],"classes":["POCKET_CLOSED","POCKET_FREE_SHAPED_STRAIGHT","POCKET_OBROUND_CURVED_STRAIGHT","POCKET_OBROUND_STRAIGHT","POCKET_OPEN","POCKET_RECTANGULAR_STRAIGHT","POCKET_ROUND_TAPERED"],"rel":["POCKET_CLEARANCE"]},
+ {"id":"H16","label":"H16 — Minimum slot-to-slot clearance","grade":"hard","scope":"feature pair","stmt":"Keep at least 3 mm of opening clearance between two same-host slots.","cond":"SLOT_CLEARANCE(A,B).slotClearance >= t_slot_gap","th":"t_slot_gap = 3.0 mm","ext":null,"on":["SLOT_*"],"classes":["SLOT_90_DEGREE","SLOT_DOVE_TAIL","SLOT_OBROUND","SLOT_PARTIAL_OBROUND","SLOT_PARTIAL_RECTANGULAR","SLOT_PARTIAL_ROUND","SLOT_PARTIAL_U_SHAPED","SLOT_RECTANGULAR","SLOT_ROUND","SLOT_T_SHAPED","SLOT_UPSIDE_DOWN_DOVE_TAIL","SLOT_U_SHAPED","SLOT_V_SHAPED"],"rel":["SLOT_CLEARANCE"]},
+ {"id":"H17","label":"H17 — Minimum slot width","grade":"hard","scope":"single feature","stmt":"Keep the smaller of the opening and bottom widths of a rectangular slot at or above 3 mm.","cond":"WIDTH >= t_slot_width","th":"t_slot_width = 3.0 mm","ext":null,"on":["SLOT_90_DEGREE","SLOT_OBROUND","SLOT_PARTIAL_OBROUND","SLOT_PARTIAL_RECTANGULAR","SLOT_PARTIAL_ROUND","SLOT_PARTIAL_U_SHAPED","SLOT_RECTANGULAR","SLOT_UPSIDE_DOWN_DOVE_TAIL","SLOT_V_SHAPED"],"classes":["SLOT_90_DEGREE","SLOT_OBROUND","SLOT_PARTIAL_OBROUND","SLOT_PARTIAL_RECTANGULAR","SLOT_PARTIAL_ROUND","SLOT_PARTIAL_U_SHAPED","SLOT_RECTANGULAR","SLOT_UPSIDE_DOWN_DOVE_TAIL","SLOT_V_SHAPED"],"rel":[]},
+ {"id":"H18","label":"H18 — Common base-hole diameter for nearby holes","grade":"advisory","scope":"feature pair","stmt":"Holes whose axis spacing is at most three times the larger diameter shall share one base-hole diameter (within 0.05 mm).","cond":"HOLE_SPACING(A,B).axisSpacing <= t_hole_near * max(DIAMETER_n(A), DIAMETER_n(B)) -> |DIAMETER_n(A) - DIAMETER_n(B)| <= tol_diameter","th":"t_hole_near = 3; tol_diameter = 0.05 mm","ext":null,"on":["STEP*"],"classes":["STEP1HOLE","STEP1HOLE_THREAD","STEP1POCKET","STEP1POCKET_THREAD","STEP2HOLE","STEP2HOLE_THREAD","STEP2POCKET","STEP2POCKET_THREAD","STEP3HOLE","STEP3HOLE1","STEP3HOLE1_THREAD","STEP3HOLE_THREAD","STEP3POCKET","STEP3POCKET_THREAD","STEP4HOLE","STEP4HOLE1","STEP4HOLE1_THREAD","STEP4HOLE_THREAD","STEP4POCKET","STEP4POCKET_THREAD","STEP5HOLE","STEP5HOLE1","STEP5HOLE1_THREAD","STEP5HOLE2","STEP5HOLE2_THREAD","STEP5HOLE_THREAD","STEP5POCKET","STEP5POCKET_THREAD","STEP6HOLE","STEP6HOLE1","STEP6HOLE1_THREAD","STEP6HOLE2","STEP6HOLE2_THREAD","STEP6HOLE_THREAD","STEP6POCKET","STEP6POCKET_THREAD"],"rel":["HOLE_SPACING"]},
+ {"id":"H19","label":"H19 — Pocket corner-radius-to-depth ratio","grade":"advisory","scope":"single feature","stmt":"Keep the minimum concave internal corner radius of a pocket at least one third of its depth.","cond":"MIN_RADIUS / DEPTH >= t_corner_depth_ratio","th":"t_corner_depth_ratio = 0.33","ext":null,"on":["POCKET_CLOSED","POCKET_OPEN","POCKET_FREE_SHAPED_STRAIGHT"],"classes":["POCKET_CLOSED","POCKET_FREE_SHAPED_STRAIGHT","POCKET_OPEN"],"rel":[]},
+ {"id":"H21","label":"H21 — Vertical walls","grade":"advisory","scope":"single feature","stmt":"Keep the maximum wall draft angle at or below 0.5 degree (for CircularBoss the derived wall draft angle).","cond":"90 - MIN_SIDE_ANGLE <= tol_draft_zero","th":"tol_draft_zero = 0.5°","ext":null,"on":["POCKET_CLOSED","POCKET_OPEN"],"classes":["POCKET_CLOSED","POCKET_OPEN"],"rel":[]},
+ {"id":"H22","label":"H22 — Entry blind hole for a deep pocket","grade":"advisory","scope":"single feature (conditional)","stmt":"A pocket at least 10 mm deep shall have a blind hole located on it as a plunge entry.","cond":"DEPTH >= t_pocket_entry_depth -> exists h in STEP*POCKET : LOCATED_ON(h, P)","th":"t_pocket_entry_depth = 10 mm","ext":null,"on":["POCKET_*"],"classes":["POCKET_CLOSED","POCKET_FREE_SHAPED_STRAIGHT","POCKET_OBROUND_CURVED_STRAIGHT","POCKET_OBROUND_STRAIGHT","POCKET_OPEN","POCKET_RECTANGULAR_STRAIGHT","POCKET_ROUND_TAPERED"],"rel":["LOCATED_ON"]},
+ {"id":"H23","label":"H23 — Slot depth-to-width ratio","grade":"advisory","scope":"single feature","stmt":"Keep the depth of a slot at or below four times its most restrictive width.","cond":"DEPTH / WIDTH <= t_slot_ld","th":"t_slot_ld = 4","ext":null,"on":["SLOT_90_DEGREE","SLOT_OBROUND","SLOT_PARTIAL_OBROUND","SLOT_PARTIAL_RECTANGULAR","SLOT_PARTIAL_ROUND","SLOT_PARTIAL_U_SHAPED","SLOT_RECTANGULAR","SLOT_UPSIDE_DOWN_DOVE_TAIL","SLOT_V_SHAPED"],"classes":["SLOT_90_DEGREE","SLOT_OBROUND","SLOT_PARTIAL_OBROUND","SLOT_PARTIAL_RECTANGULAR","SLOT_PARTIAL_ROUND","SLOT_PARTIAL_U_SHAPED","SLOT_RECTANGULAR","SLOT_UPSIDE_DOWN_DOVE_TAIL","SLOT_V_SHAPED"],"rel":[]},
+ {"id":"H27","label":"H27 — Normal hole entry","grade":"hard","scope":"feature pair","stmt":"Every LOCATED_ON terminal of a hole shall rest on a planar host face whose normal is parallel to the hole axis within 1 degree.","cond":"forall t in LOCATED_ON(hole, *).terminals : t.hostSurfaceType == PLANE and angle((X_ORIENTATION_D, Y_ORIENTATION_D, Z_ORIENTATION_D), t.hostSurfaceNormal) <= t_normal_entry","th":"t_normal_entry = 1.0°","ext":null,"on":["STEP*"],"classes":["STEP1HOLE","STEP1HOLE_THREAD","STEP1POCKET","STEP1POCKET_THREAD","STEP2HOLE","STEP2HOLE_THREAD","STEP2POCKET","STEP2POCKET_THREAD","STEP3HOLE","STEP3HOLE1","STEP3HOLE1_THREAD","STEP3HOLE_THREAD","STEP3POCKET","STEP3POCKET_THREAD","STEP4HOLE","STEP4HOLE1","STEP4HOLE1_THREAD","STEP4HOLE_THREAD","STEP4POCKET","STEP4POCKET_THREAD","STEP5HOLE","STEP5HOLE1","STEP5HOLE1_THREAD","STEP5HOLE2","STEP5HOLE2_THREAD","STEP5HOLE_THREAD","STEP5POCKET","STEP5POCKET_THREAD","STEP6HOLE","STEP6HOLE1","STEP6HOLE1_THREAD","STEP6HOLE2","STEP6HOLE2_THREAD","STEP6HOLE_THREAD","STEP6POCKET","STEP6POCKET_THREAD"],"rel":["LOCATED_ON"]},
+ {"id":"H28","label":"H28 — Minimum blind-hole floor thickness","grade":"hard","scope":"single feature","stmt":"Keep at least 2 mm of remaining material below a blind-hole bottom.","cond":"derived_floor_thickness >= t_floor","th":"t_floor = 2.0 mm","ext":null,"on":["STEP*POCKET"],"classes":["STEP1POCKET","STEP2POCKET","STEP3POCKET","STEP4POCKET","STEP5POCKET","STEP6POCKET"],"rel":[]},
+ {"id":"H37","label":"H37 — Minimum clearance around a boss","grade":"hard","scope":"single feature","stmt":"Keep at least 3 mm of free space around a boss.","cond":"derived_min_clearance >= t_boss_clearance","th":"t_boss_clearance = 3.0 mm","ext":null,"on":["BOSS_*"],"classes":["BOSS_RECTANGULAR_STRAIGHT","BOSS_ROUND_STRAIGHT","BOSS_ROUND_STRAIGHT_THREAD"],"rel":[]},
+ {"id":"H38","label":"H38 — Rectangular-boss slenderness ratio","grade":"advisory","scope":"single feature","stmt":"Keep the height-to-minimum-thickness ratio of a rectangular boss at or below 10.","cond":"DEPTH / min(WIDTH, LENGTH) <= t_boss_slenderness","th":"t_boss_slenderness = 10","ext":null,"on":["BOSS_RECTANGULAR_STRAIGHT"],"classes":["BOSS_RECTANGULAR_STRAIGHT"],"rel":[]},
+ {"id":"H43","label":"H43 — Minimum through-cut corner radius","grade":"hard","scope":"single feature","stmt":"Keep the minimum concave internal corner radius of a through cut at or above 3 mm.","cond":"MIN_RADIUS >= t_throughcut_corner_radius","th":"t_throughcut_corner_radius = 3.0 mm","ext":null,"on":["HOLE_FREE_SHAPED_STRAIGHT"],"classes":["HOLE_FREE_SHAPED_STRAIGHT"],"rel":[]},
+ {"id":"H45","label":"H45 — Tool length-to-diameter capability","grade":"hard","scope":"single feature","stmt":"Keep the hole depth-to-diameter ratio within the maximum L/D reachable by the available tools.","cond":"forall sections k : sectionDepth(k) / DIAMETER_k <= tool_magazine(machine).max_length_to_diameter","th":"—","ext":"tool magazine","on":["STEP*POCKET"],"classes":["STEP1POCKET","STEP2POCKET","STEP3POCKET","STEP4POCKET","STEP5POCKET","STEP6POCKET"],"rel":[]},
+ {"id":"H46","label":"H46 — Minimum intersecting-hole angle","grade":"hard","scope":"feature pair","stmt":"Keep the crossing angle between two intersecting holes at or above 45 degrees.","cond":"INTERSECTS(A,B).crossingAngle >= t_crossing_angle","th":"t_crossing_angle = 45°","ext":null,"on":["STEP*"],"classes":["STEP1HOLE","STEP1HOLE_THREAD","STEP1POCKET","STEP1POCKET_THREAD","STEP2HOLE","STEP2HOLE_THREAD","STEP2POCKET","STEP2POCKET_THREAD","STEP3HOLE","STEP3HOLE1","STEP3HOLE1_THREAD","STEP3HOLE_THREAD","STEP3POCKET","STEP3POCKET_THREAD","STEP4HOLE","STEP4HOLE1","STEP4HOLE1_THREAD","STEP4HOLE_THREAD","STEP4POCKET","STEP4POCKET_THREAD","STEP5HOLE","STEP5HOLE1","STEP5HOLE1_THREAD","STEP5HOLE2","STEP5HOLE2_THREAD","STEP5HOLE_THREAD","STEP5POCKET","STEP5POCKET_THREAD","STEP6HOLE","STEP6HOLE1","STEP6HOLE1_THREAD","STEP6HOLE2","STEP6HOLE2_THREAD","STEP6HOLE_THREAD","STEP6POCKET","STEP6POCKET_THREAD"],"rel":["INTERSECTS"]},
+ {"id":"H49","label":"H49 — Limit distinct hole diameters","grade":"advisory","scope":"part-level aggregate","stmt":"Limit a part to at most five distinct through- and blind-hole diameters (within 0.05 mm).","cond":"distinct(DIAMETER_1 .. DIAMETER_n over STEP* in part, tol_diameter) <= t_diameter_variety","th":"t_diameter_variety = 5; tol_diameter = 0.05 mm","ext":null,"on":["STEP*"],"classes":["STEP1HOLE","STEP1HOLE_THREAD","STEP1POCKET","STEP1POCKET_THREAD","STEP2HOLE","STEP2HOLE_THREAD","STEP2POCKET","STEP2POCKET_THREAD","STEP3HOLE","STEP3HOLE1","STEP3HOLE1_THREAD","STEP3HOLE_THREAD","STEP3POCKET","STEP3POCKET_THREAD","STEP4HOLE","STEP4HOLE1","STEP4HOLE1_THREAD","STEP4HOLE_THREAD","STEP4POCKET","STEP4POCKET_THREAD","STEP5HOLE","STEP5HOLE1","STEP5HOLE1_THREAD","STEP5HOLE2","STEP5HOLE2_THREAD","STEP5HOLE_THREAD","STEP5POCKET","STEP5POCKET_THREAD","STEP6HOLE","STEP6HOLE1","STEP6HOLE1_THREAD","STEP6HOLE2","STEP6HOLE2_THREAD","STEP6HOLE_THREAD","STEP6POCKET","STEP6POCKET_THREAD"],"rel":[]},
+ {"id":"H50","label":"H50 — Feature extent within usable tool length","grade":"hard","scope":"single feature","stmt":"Keep blind-hole, slot and pocket depth, and the maximum face extent of a step, within the usable cutting length of a standard tool.","cond":"DEPTH <= tool_magazine(machine).max_usable_length","th":"—","ext":"tool magazine","on":["STEP*","SLOT_*","POCKET_*"],"classes":["POCKET_CLOSED","POCKET_FREE_SHAPED_STRAIGHT","POCKET_OBROUND_CURVED_STRAIGHT","POCKET_OBROUND_STRAIGHT","POCKET_OPEN","POCKET_RECTANGULAR_STRAIGHT","POCKET_ROUND_TAPERED","SLOT_90_DEGREE","SLOT_DOVE_TAIL","SLOT_OBROUND","SLOT_PARTIAL_OBROUND","SLOT_PARTIAL_RECTANGULAR","SLOT_PARTIAL_ROUND","SLOT_PARTIAL_U_SHAPED","SLOT_RECTANGULAR","SLOT_ROUND","SLOT_T_SHAPED","SLOT_UPSIDE_DOWN_DOVE_TAIL","SLOT_U_SHAPED","SLOT_V_SHAPED","STEP1HOLE","STEP1HOLE_THREAD","STEP1POCKET","STEP1POCKET_THREAD","STEP2HOLE","STEP2HOLE_THREAD","STEP2POCKET","STEP2POCKET_THREAD","STEP3HOLE","STEP3HOLE1","STEP3HOLE1_THREAD","STEP3HOLE_THREAD","STEP3POCKET","STEP3POCKET_THREAD","STEP4HOLE","STEP4HOLE1","STEP4HOLE1_THREAD","STEP4HOLE_THREAD","STEP4POCKET","STEP4POCKET_THREAD","STEP5HOLE","STEP5HOLE1","STEP5HOLE1_THREAD","STEP5HOLE2","STEP5HOLE2_THREAD","STEP5HOLE_THREAD","STEP5POCKET","STEP5POCKET_THREAD","STEP6HOLE","STEP6HOLE1","STEP6HOLE1_THREAD","STEP6HOLE2","STEP6HOLE2_THREAD","STEP6HOLE_THREAD","STEP6POCKET","STEP6POCKET_THREAD"],"rel":[]},
+ {"id":"H51","label":"H51 — Minimum remaining wall thickness around a feature","grade":"hard","scope":"single feature","stmt":"Keep the remaining wall thickness around a removal feature at or above 1 mm.","cond":"derived_min_wall_thickness >= t_min_wall","th":"t_min_wall = 1.0 mm","ext":null,"on":["STEP*","SLOT_*","POCKET_*","HOLE_*"],"classes":["HOLE_FREE_SHAPED_STRAIGHT","HOLE_OBROUND_CURVED_STRAIGHT","HOLE_OBROUND_STRAIGHT","HOLE_RECTANGULAR_STRAIGHT","HOLE_ROUND_INTERRUPTED_STRAIGHT","HOLE_ROUND_TAPERED","POCKET_CLOSED","POCKET_FREE_SHAPED_STRAIGHT","POCKET_OBROUND_CURVED_STRAIGHT","POCKET_OBROUND_STRAIGHT","POCKET_OPEN","POCKET_RECTANGULAR_STRAIGHT","POCKET_ROUND_TAPERED","SLOT_90_DEGREE","SLOT_DOVE_TAIL","SLOT_OBROUND","SLOT_PARTIAL_OBROUND","SLOT_PARTIAL_RECTANGULAR","SLOT_PARTIAL_ROUND","SLOT_PARTIAL_U_SHAPED","SLOT_RECTANGULAR","SLOT_ROUND","SLOT_T_SHAPED","SLOT_UPSIDE_DOWN_DOVE_TAIL","SLOT_U_SHAPED","SLOT_V_SHAPED","STEP1HOLE","STEP1HOLE_THREAD","STEP1POCKET","STEP1POCKET_THREAD","STEP2HOLE","STEP2HOLE_THREAD","STEP2POCKET","STEP2POCKET_THREAD","STEP3HOLE","STEP3HOLE1","STEP3HOLE1_THREAD","STEP3HOLE_THREAD","STEP3POCKET","STEP3POCKET_THREAD","STEP4HOLE","STEP4HOLE1","STEP4HOLE1_THREAD","STEP4HOLE_THREAD","STEP4POCKET","STEP4POCKET_THREAD","STEP5HOLE","STEP5HOLE1","STEP5HOLE1_THREAD","STEP5HOLE2","STEP5HOLE2_THREAD","STEP5HOLE_THREAD","STEP5POCKET","STEP5POCKET_THREAD","STEP6HOLE","STEP6HOLE1","STEP6HOLE1_THREAD","STEP6HOLE2","STEP6HOLE2_THREAD","STEP6HOLE_THREAD","STEP6POCKET","STEP6POCKET_THREAD"],"rel":[]},
+ {"id":"H53","label":"H53 — Standard V-slot tool angle","grade":"advisory","scope":"single feature","stmt":"Use a standard V-slot included angle of 30, 45, 60, 90 or 120 degrees (within 1 degree).","cond":"exists a in T_v_tool_angles : |ANGLE - a| <= tol_angle","th":"T_v_tool_angles = {30, 45, 60, 90, 120}; tol_angle = 1.0°","ext":null,"on":["SLOT_V_SHAPED","SLOT_DOVE_TAIL","SLOT_UPSIDE_DOWN_DOVE_TAIL"],"classes":["SLOT_DOVE_TAIL","SLOT_UPSIDE_DOWN_DOVE_TAIL","SLOT_V_SHAPED"],"rel":[]}
+];
+/* ══════ END GENERATED DATA ══════ */
+
+/* ═══════════════════════════════════════════════════════════════════
+   Rendering code, written by hand.  The data block above is generated from the YAML.
+   The page branches on no class name, no attribute name and no H number.
+   ═══════════════════════════════════════════════════════════════════ */
+const $ = s => document.querySelector(s);
+const $$ = s => Array.from(document.querySelectorAll(s));
+const esc = s => String(s).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+
+const BY = {};
+C.forEach(c => BY[c[0]] = c);
+const KIDS = {};
+C.forEach(c => { if (c[1]) (KIDS[c[1]] = KIDS[c[1]] || []).push(c[0]); });
+const ROOT = C.find(c => c[1] === null)[0];
+
+function showTab(k) {
+  ['cls', 'rel', 'heu'].forEach(x => {
+    $('#tb-' + x).classList.toggle('on', x === k);
+    $('#v-' + x).classList.toggle('on', x === k);
+  });
+  window.scrollTo(0, 0);
+}
+
+/* inheritance is expanded here in the page: an attribute name appears once, in A */
+function effective(name) {
+  const seen = {}, out = [];
+  for (let cur = name; cur; cur = BY[cur][1])
+    BY[cur][4].forEach(i => { if (!(i in seen)) { seen[i] = cur; out.push([i, cur]); } });
+  return out.sort((a, b) => A[a[0]][0] < A[b[0]][0] ? -1 : 1);
+}
+function chain(name) { const o = []; for (let c = name; c; c = BY[c][1]) o.push(c); return o.reverse(); }
+
+/* ═══════════════════════ 1 - FEATURE CLASSES AND ATTRIBUTES ═══════════════════════ */
+
+$('#list').innerHTML = (function tree(name, depth) {
+  const c = BY[name];
+  let s = `<div class="row" data-c="${esc(name)}" style="padding-left:${8 + depth * 12}px">`
+    + `<span class="cname"${c[2] ? ' style="font-style:italic;font-weight:500"' : ''}>${esc(name)}</span></div>`;
+  /* the tree does not print niceName: it is longer than the class name, crowds the class
+     name out of view, and already appears on the first line of the detail pane on the
+     right.  v5.1 prints a short label there instead, which is short enough not to crowd. */
+  (KIDS[name] || []).slice().sort().forEach(k => s += tree(k, depth + 1));
+  return s;
+})(ROOT, 0);
+
+function attrTable(rows) {
+  if (!rows.length) return '<p class="mut">none</p>';
+  return '<table class="obs"><tr><th>Attribute</th><th>DataType</th><th>Unit</th><th>SubType</th>'
+    + '<th>Source</th><th>Inherited from</th></tr>'
+    + rows.map(([i, from]) => {
+      const a = A[i];
+      return `<tr><td><code>${esc(a[0])}</code></td><td>${esc(a[1] || '—')}</td>`
+        + `<td>${esc(a[2] || '—')}</td><td>${esc(a[3] || '—')}</td><td>${esc(a[4])}</td>`
+        + `<td><code>${esc(from)}</code></td></tr>`;
+    }).join('') + '</table>';
+}
+
+function hFor(id) { return H.filter(h => (h.classes || []).indexOf(id) >= 0); }
+
+function hCards(list, empty) {
+  if (!list.length) return `<p class="mut">${empty}</p>`;
+  return list.map(h => `<div class="hcard">
+    <div class="hhead"><span class="hid">${esc(h.id)}</span><span class="hzh">${esc(h.label)}</span>
+      <span class="hscope">${esc(h.scope)}</span></div>
+    <p class="hstmt">${esc(h.stmt)}</p>
+    <pre class="hexpr">${esc(h.cond)}</pre>
+    ${h.th && h.th !== '—' ? `<div class="hth">${esc(h.th)}</div>` : ''}
+    ${h.ext ? `<div class="hth">external input: ${esc(h.ext)}</div>` : ''}</div>`).join('');
+}
+
+function show(id) {
+  $$('#list .row').forEach(r => r.classList.toggle('sel', r.dataset.c === id));
+  const c = BY[id], eff = effective(id), own = eff.filter(e => e[1] === id);
+  const inherited = eff.filter(e => e[1] !== id);
+  $('#panel').innerHTML = `
+   <h1>${esc(id)}</h1>
+   <div class="sub">${c[3] ? esc(c[3]) + ' · ' : ''}${c[1] ? 'parent <code>' + esc(c[1]) + '</code> &middot; ' : ''}${eff.length} attributes${c[2] ? ' · abstract' : ''}</div>
+   <h2>Inheritance chain</h2>
+   <p class="mono">${chain(id).map(n => `<code>${esc(n)}</code>`).join(' › ')}</p>
+   <h2>Own fields ${own.length}</h2>
+   ${attrTable(own)}
+   <h2>Inherited fields ${inherited.length}</h2>
+   ${attrTable(inherited)}
+   <h2>Heuristic rules that apply</h2>
+   <p class="intro">The rules below are evaluated over instances of this class. Attribute names in a condition come from NX's own attribute vocabulary.</p>
+   ${hCards(hFor(id), 'No heuristic rule applies to this class at present.')}`;
+  window.scrollTo(0, 0);
+}
+$$('#list .row').forEach(r => r.onclick = () => show(r.dataset.c));
+show(ROOT);
+
+/* ═══════════════════════ 2 - RELATIONS ═══════════════════════ */
+/* the layout follows v5.1's: relation legend, class legend, allowed-pair matrix, then one
+   section per relation.  The axes of the matrix are NX's own families (`STEP` / `HOLES`
+   / ...) rather than the 84 leaf classes -- 84x84 spread out is unreadable, and a family
+   name is just as much an NX class. */
+
+const FAMS = R.families.map(f => f[0]);
+const relChip = r => `<span class="cellchip" title="${esc(r.id)} · ${esc(r.label)}" `
+  + `style="background:${r.col}"></span>`;
+
+document.getElementById('rellegend').innerHTML = R.types.map(r =>
+  `<span class="lg"><span class="sw" style="background:${r.col}"></span>`
+  + `<code>${esc(r.ab)}</code> ${esc(r.id)} <span class="mut">${esc(r.label)}</span></span>`).join('');
+
+document.getElementById('clslegend').innerHTML = R.families.map(f =>
+  `<div class="lgfam"><span class="lgt">${esc(f[0])}</span>`
+  + f[1].map(c => `<span class="lg"><code>${esc(c)}</code>`
+      + `<span class="zh">${esc((BY[c] || [])[3] || '')}</span></span>`).join('')
+  + '</div>').join('');
+
+(function buildMatrix() {
+  let h = '<table id="matrix"><tr><th class="rowh"></th>'
+    + FAMS.map(f => `<th title="${esc(f)}"><span>${esc(f)}</span></th>`).join('') + '</tr>';
+  FAMS.forEach((a, i) => {
+    h += `<tr><th class="rowh" title="${esc(a)}">${esc(a)}</th>`;
+    FAMS.forEach((b, j) => {
+      if (j < i) { h += '<td class="lo"></td>'; return; }
+      h += '<td>' + R.types.filter(r => r.pairs.indexOf(a + '|' + b) >= 0).map(relChip).join('') + '</td>';
+    });
+    h += '</tr>';
+  });
+  document.getElementById('matrixwrap').innerHTML = h + '</table>';
+})();
+
+function hForRel(id) { return H.filter(h => (h.rel || []).indexOf(id) >= 0); }
+
+document.getElementById('reldetail').innerHTML =
+  `<h2 style="margin-top:26px">${R.types.length} relations</h2>`
+  + '<p class="intro">NX publishes no relation between features. Every relation below is obtained by '
+  + 'the pipeline from attributes NX does publish, from the PartModel topology, or from a kernel '
+  + 'measurement. The names match the open-source line because the topological notion matches; '
+  + '<b>no equivalence between the two sides is asserted</b>.</p>'
+  + '<table class="obs rel"><tr><th>Relation</th><th>Definition</th><th>Direction</th>'
+  + '<th>Allowed class pairs</th><th>Relation properties</th></tr>'
+  + R.types.map(r => `<tr><td><span class="dot" style="background:${r.col}"></span>`
+      + `<code>${esc(r.id)}</code><div class="mut">${esc(r.label)}</div></td>`
+      + `<td>${r.def}</td><td>${esc(r.dir)}</td><td>${r.gov}</td>`
+      + `<td>${esc(r.prop)}</td></tr>`).join('')
+  + '</table>'
+  + '<h2 style="margin-top:26px">When it holds</h2>'
+  + R.types.map(r => `<div class="relcard"><div class="relhead">`
+      + `<span class="dot" style="background:${r.col}"></span>`
+      + `<code class="rid">${esc(r.id)}</code><span class="rzh">${esc(r.label)}</span></div>`
+      + '<ul>' + r.when.map(x => `<li>${x}</li>`).join('') + '</ul></div>').join('')
+  + '<h2 style="margin-top:26px">Quantities the relations carry</h2>'
+  + '<table class="obs"><tr><th>Quantity</th><th>On which relation</th><th>Range</th><th>Unit</th>'
+  + '<th>Definition</th></tr>'
+  + R.props.map(p => `<tr><td><code>${esc(p.name)}</code><div class="mut">${esc(p.label)}</div></td>`
+      + `<td><code>${esc(p.on)}</code></td><td>${esc(p.range)}</td>`
+      + `<td>${esc(p.unit || '—')}</td><td>${esc(p.def)}</td></tr>`).join('')
+  + '</table>'
+  + `<h2 style="margin-top:26px">${esc(R.terminal.class)} <span class="mut">${esc(R.terminal.label)}</span></h2>`
+  + `<p>${esc(R.terminal.def)}</p>`
+  + '<table class="obs"><tr><th>Field</th><th>Range</th><th>Definition</th></tr>'
+  + R.terminal.fields.map(f => `<tr><td><code>${esc(f.name)}</code>`
+      + `<div class="mut">${esc(f.label)}</div></td><td>${esc(f.range)}</td>`
+      + `<td>${esc(f.def)}</td></tr>`).join('') + '</table>'
+  + '<h2 style="margin-top:26px">Derived attributes, nxd:</h2>'
+  + '<p class="intro">Quantities the pipeline computes and NX does not publish live in a separate '
+  + 'namespace, so that "NX said it" and "we computed it" come apart at the level of the IRI.</p>'
+  + '<table class="obs"><tr><th>Name</th><th>Range</th><th>Definition</th></tr>'
+  + R.derived.map(d => `<tr><td><code>nxd:${esc(d.name)}</code>`
+      + `<div class="mut">${esc(d.label)}</div></td><td>${esc(d.range)}</td>`
+      + `<td>${esc(d.def)}</td></tr>`).join('') + '</table>'
+  + '<h2 style="margin-top:34px">Heuristic rules that reference each relation</h2>'
+  + '<p class="intro">The conditions of the rules below reference the existence of the relation or one of its properties.</p>'
+  + R.types.map(r => `<h2 style="margin-top:22px">`
+      + `<span class="dot" style="background:${r.col}"></span> ${esc(r.id)}</h2>`
+      + hCards(hForRel(r.id), 'No heuristic rule references this relation at present.')).join('');
+
+/* ═══════════════════════ 3 - HEURISTIC RULES ═══════════════════════ */
+
+$('#hmain').innerHTML =
+  '<h1>Heuristic rules</h1>'
+  + `<div class="sub">${H.length} rules; domains and conditions are written in NX's own class and attribute names.</div>`
+  + '<div class="htabwrap"><table class="htab"><tr><th>H</th><th>Name</th><th>Grade</th>'
+  + '<th>Scope</th><th>Domain</th><th>Condition</th></tr>'
+  + H.map(h => `<tr><td><code>${esc(h.id)}</code></td><td>${esc(h.label)}</td>`
+      + `<td class="small">${esc(h.grade)}</td><td class="small">${esc(h.scope)}</td>`
+      + `<td class="mono">${h.on.map(o => esc(o)).join('<br>')}</td>`
+      + `<td class="mono">${esc(h.cond)}</td></tr>`).join('')
+  + '</table></div>'
+  + '<h2 style="margin-top:26px">Rule by rule</h2>'
+  + hCards(H, '');
+</script>
+</body>
+</html>

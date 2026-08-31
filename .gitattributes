@@ -1,0 +1,12 @@
+# Line endings are recorded exactly as committed.  This repository is a
+# snapshot export: normalising on checkout would rewrite files that were
+# byte-identical to the source, and the first `git status` after a clone would
+# show a diff nobody made.
+* -text
+
+# Binary, so no tool tries to diff or normalise them.
+*.pth   binary
+*.bin   binary
+*.png   binary
+*.step  binary
+*.STEP  binary

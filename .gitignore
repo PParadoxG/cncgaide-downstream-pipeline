@@ -1,0 +1,29 @@
+# Generated results.  One directory per part; rebuilt by `refresh`.
+runs/
+
+# Running viewer instances (one file per port, removed when it exits)
+.viewer/
+
+# Your STEP files stay yours: they are not committed, so nothing you analyse
+# leaves this machine through git.  The two exceptions below are the
+# verification fixture, which has to be tracked because verify_install.py
+# compares against the result it produces.
+inputs/**
+!inputs/.gitkeep
+!inputs/STEPtest2.stp
+
+# Where NX is on this machine (template: config/nx_local.example.json)
+/config/nx_local.json
+
+# Python
+__pycache__/
+*.py[cod]
+
+# Editors
+.vscode/
+.idea/
+
+# Logs and scratch
+*.log
+*.tmp
+*.bak

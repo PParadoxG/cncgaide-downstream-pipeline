@@ -1,0 +1,107 @@
+GatherSeed / CNCgAIde
+Third-party components included in this repository
+
+This file covers code that is *vendored* - checked in under this repository's
+own tree rather than installed from a package index.  Packages installed by
+`environment.yml` (torch, dgl, pythonocc-core, numpy, scipy, timm, networkx,
+tqdm, PyYAML) carry their own licences through their distributions and are not
+repeated here.
+
+
+-------------------------------------------------------------------------------
+AAGNet
+  Path      src/occline/aagnet/vendor/AAGNet/
+  Upstream  https://github.com/whjdark/AAGNet
+  Licence   MIT - full text at src/occline/aagnet/vendor/AAGNet/LICENSE
+            Copyright (c) 2023 whj_dark
+
+  The per-face machining-feature recognition network.  Vendored rather than
+  installed because it is published as a research repository, not a package.
+
+  Includes the trained weights used by this pipeline:
+      src/occline/aagnet/vendor/AAGNet/weights/weight_on_MFInstseg.pth
+      1,785,920 bytes
+  They are part of the repository, so a clone needs no separate download.  The
+  weights are hashed into the `aagnet` layer stamp: replacing them rebuilds
+  every part, which is the intended behaviour.
+
+
+-------------------------------------------------------------------------------
+occwl (OCC Wrapper Library)
+  Path      src/occline/aagnet/vendor/occwl/
+  Upstream  https://github.com/AutodeskAILab/occwl
+
+  A Pythonic wrapper around pythonocc, used by AAGNet's graph extractor.
+
+  NOTE: this snapshot does not include the upstream LICENCE file.  The licence
+  therefore cannot be stated from the contents of this repository alone.  This
+  gap must be closed - by vendoring the upstream LICENCE - before the code is
+  distributed outside the group.
+
+
+-------------------------------------------------------------------------------
+PyYAML
+  Path      src/nxline/vendor/yaml/
+  Upstream  https://github.com/yaml/pyyaml
+  Licence   MIT - full text at src/nxline/vendor/yaml/LICENSE
+            Copyright (c) 2017-2021 Ingy dot Net
+            Copyright (c) 2006-2016 Kirill Simonov
+
+  A second, vendored copy of PyYAML.  It exists because the NX journal runs
+  inside NX's own embedded Python interpreter, which has neither this project's
+  environment nor PYTHONPATH; the journal carries what it needs with it.
+
+
+-------------------------------------------------------------------------------
+three.js  (r160)
+  Path      src/visualization/vendor/three.module.js
+            src/visualization/vendor/OrbitControls.js
+  Upstream  https://github.com/mrdoob/three.js
+  Licence   MIT - SPDX-License-Identifier: MIT declared in the file header
+            Copyright 2010-2023 Three.js Authors
+
+  The 3D viewer.  OrbitControls.js comes from the same distribution's
+  examples/jsm/controls/.
+
+
+-------------------------------------------------------------------------------
+Cytoscape.js
+  Path      src/visualization/vendor/cytoscape.min.js
+  Upstream  https://github.com/cytoscape/cytoscape.js
+  Licence   MIT - declared in the file header
+            Copyright (c) 2016-2023, The Cytoscape Consortium
+
+  The feature-graph view.
+
+
+-------------------------------------------------------------------------------
+fCoSE layout family
+  Path      src/visualization/vendor/cytoscape-fcose.js
+            src/visualization/vendor/cose-base.js
+            src/visualization/vendor/layout-base.js
+  Upstream  https://github.com/iVis-at-Bilkent/cytoscape.js-fcose
+            https://github.com/iVis-at-Bilkent/cose-base
+            https://github.com/iVis-at-Bilkent/layout-base
+  Licence   MIT
+
+  The graph layout engine Cytoscape.js is driven with.  The three files are one
+  dependency chain: cytoscape-fcose requires cose-base, which requires
+  layout-base.
+
+
+-------------------------------------------------------------------------------
+Siemens NX
+
+  Not included, and not includable.  The NX line drives a local NX installation
+  through its own executables (NXBIN/step242.exe, NXBIN/run_journal.exe) and
+  reads its feature schema (UGII/customization_base.xml).  NX is commercial
+  software under Siemens' licence; nothing from it is redistributed here.
+
+  The nx_v1 ontology *quotes* NX's declared class and attribute names, and pins
+  the sha256 of the two installed XML files it was derived from, so that what
+  was read can be checked against a given install.  No NX code or data file is
+  copied into this repository.
+
+  Consequence for anyone without NX: the open-source line runs anyway.  A
+  missing or unlicensed NX is recorded as a named degradation
+  (`lines.nx = NOT_BUILT` with a reason), never as a failure.

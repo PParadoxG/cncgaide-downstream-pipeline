@@ -1,0 +1,71 @@
+# The recipe.  This is the file to install from:
+#
+#     conda env create -f environment.yml
+#     conda activate CNCgAIde
+#
+# It lists only the packages that were actually chosen; the ~100 that come
+# along as dependencies are the solver's business, not a decision anyone made.
+# `environment.lock.yml` next to this file is the archive of one exact solve -
+# read it to learn what was running, never install from it.
+#
+# Why not `conda env export --from-history`?  Because on this project it lies:
+# it writes `channels: [defaults]` even when everything was installed with
+# `-c conda-forge --override-channels`, and pythonocc-core does not exist on
+# defaults.  It also drops the pip section entirely.  A file produced that way
+# installs nothing that works, so this one is maintained by hand.
+#
+# Verified on win-64 / Python 3.10.21: 636 tests pass, 14 skip.
+
+name: CNCgAIde
+
+channels:
+  # conda-forge only.  Mixing in defaults is the classic way to get an OCCT
+  # that imports but crashes, because the two channels build against different
+  # runtimes.  Keep this list at one entry.
+  - conda-forge
+
+dependencies:
+  - python=3.10
+
+  # The CAD kernel.  Only conda-forge has it - pip cannot install OCCT, which
+  # is a C++ library rather than Python.  The `novtk` variant is deliberate:
+  # the default build drags in VTK (~44 MB) and this pipeline imports none of
+  # it.  Note the single `=` before the build string, which is a glob.
+  - pythonocc-core=7.9.3=novtk*
+
+  - pip
+  - pip:
+      # AAGNet's per-face inference runs on torch + dgl.  CPU is the supported
+      # configuration and it is not a downgrade: the recognition results are
+      # identical to CUDA, node for node and edge for edge, and the heaviest
+      # part in the corpus takes about 16 seconds.  What CPU removes is the
+      # failure mode that costs the most time - torch and dgl built against
+      # mismatched CUDA versions install without complaint and crash on the
+      # first inference.
+      #
+      # On Windows, PyPI's torch wheel *is* the CPU build, so the plain pin
+      # below is enough.  On Linux or macOS the same line pulls the ~2 GB CUDA
+      # build instead; add `--index-url https://download.pytorch.org/whl/cpu`
+      # there.  (This repository is Windows-only in practice - the NX line
+      # needs a Windows NX install - but the open-source line has no such tie.)
+      - torch==2.0.1
+      - dgl==1.1.0
+
+      # numpy must stay below 2.x: torch 2.0.1 was built against the 1.x ABI
+      # and fails at import with numpy 2.
+      - numpy==1.26.4
+      - scipy==1.13.1
+
+      # Reached through the vendored AAGNet and occwl snapshots rather than by
+      # our own code, which is why they look unused at a glance.
+      - timm==1.0.27
+      - networkx==3.4.2
+      - tqdm==4.68.3
+
+      - PyYAML==6.0.3
+
+      # Optional, and only for rebuilding the ontologies from their YAML
+      # sources (`ontology/*/build/build_all.py`).  The pipeline itself never
+      # imports it: it reads the YAML directly.  Uncomment to work on the
+      # ontology.
+      # - rdflib==7.6.0

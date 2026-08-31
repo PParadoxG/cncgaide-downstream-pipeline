@@ -1,0 +1,245 @@
+# Copied verbatim from ontology/v5.1/source/thresholds.yaml (node 19 D16-t).
+#
+# A threshold is a manufacturing constant, not an ontological one: t_hole_ld is 4 no
+# matter who recognised the hole.  The copy exists because the red line freezes
+# ontology/v5.1/, so the file cannot be promoted to a place both sides share; the
+# right shape is one table above both ontologies, and it waits.
+#
+# validate.py must check this file agrees with v5.1 on every shared symbol.  Unlike
+# KPI or machine definitions, these have a reason to be equal, so a check can police
+# them -- that is what makes copying safe here and unsafe there.
+#
+# sha256 of the v5.1 file at copy time: f796a10af1394295b1f4d3584069444370c62a88168d7a772c10591bb4996b23
+
+process_thresholds:
+- symbol: t_hole_ld
+  value: 4
+  unit: null
+  used_by:
+  - H01
+  source: v4.0
+- symbol: t_pocket_ld
+  value: 5
+  unit: null
+  used_by:
+  - H03
+  source: v4.0
+- symbol: t_fillet_radius
+  value: 0.5
+  unit: mm
+  used_by:
+  - H05
+  source: v4.0
+- symbol: t_boss_diameter
+  value: 3.0
+  unit: mm
+  used_by:
+  - H06
+  source: v4.0
+- symbol: t_boss_hd
+  value: 4
+  unit: null
+  used_by:
+  - H07
+  source: v4.0
+- symbol: t_hole_axis_variety
+  value: 1
+  unit: count
+  used_by:
+  - H09
+  source: proposal
+- symbol: t_corner_radius
+  value: 1.0
+  unit: mm
+  used_by:
+  - H10
+  source: v4.0
+- symbol: t_floor
+  value: 2.0
+  unit: mm
+  used_by:
+  - H11
+  - H28
+  source: v4.0
+- symbol: t_hole_web
+  value: 2.0
+  unit: mm
+  used_by:
+  - H12
+  source: proposal
+- symbol: t_pocket_gap
+  value: 3.0
+  unit: mm
+  used_by:
+  - H15
+  source: v4.0
+- symbol: t_slot_gap
+  value: 3.0
+  unit: mm
+  used_by:
+  - H16
+  source: v4.0
+- symbol: t_slot_width
+  value: 3.0
+  unit: mm
+  used_by:
+  - H17
+  source: v4.0
+- symbol: t_hole_near
+  value: 3
+  unit: null
+  used_by:
+  - H18
+  source: proposal
+- symbol: t_corner_depth_ratio
+  value: 0.33
+  unit: null
+  used_by:
+  - H19
+  source: v4.0
+- symbol: t_pocket_entry_depth
+  value: 10
+  unit: mm
+  used_by:
+  - H22
+  source: v4.0
+- symbol: t_slot_ld
+  value: 4
+  unit: null
+  used_by:
+  - H23
+  source: v4.0
+- symbol: t_boss_clearance
+  value: 3.0
+  unit: mm
+  used_by:
+  - H37
+  source: v4.0
+- symbol: t_boss_slenderness
+  value: 10
+  unit: null
+  used_by:
+  - H38
+  source: v4.0
+- symbol: t_corner_angle
+  value: 90
+  unit: deg
+  used_by:
+  - H41
+  source: v4.0
+- symbol: t_throughcut_corner_radius
+  value: 3.0
+  unit: mm
+  used_by:
+  - H43
+  source: v4.0
+- symbol: t_crossing_angle
+  value: 45
+  unit: deg
+  used_by:
+  - H46
+  source: v4.0
+- symbol: t_axis_variety
+  value: 2
+  unit: count
+  used_by:
+  - H48
+  source: v4.0
+- symbol: t_diameter_variety
+  value: 5
+  unit: count
+  used_by:
+  - H49
+  source: v4.0
+- symbol: t_fillet_variety
+  value: 2
+  unit: count
+  used_by:
+  - H34
+  source: v4.0
+- symbol: t_chamfer_variety
+  value: 1
+  unit: count
+  used_by:
+  - H35
+  source: v4.0
+- symbol: t_min_wall
+  value: 1.0
+  unit: mm
+  used_by:
+  - H51
+  source: proposal
+- symbol: T_countersink_angles
+  value:
+  - 60
+  - 90
+  - 120
+  unit: deg
+  used_by:
+  - H52
+  source: proposal (DIN 335)
+- symbol: T_v_tool_angles
+  value:
+  - 30
+  - 45
+  - 60
+  - 90
+  - 120
+  unit: deg
+  used_by:
+  - H53
+  source: proposal
+- symbol: t_step_angle
+  value: 90
+  unit: deg
+  used_by:
+  - H54
+  source: proposal
+tolerances:
+- symbol: tol_diameter
+  value: 0.05
+  unit: mm
+  used_by:
+  - H08
+  - H18
+  - H49
+- symbol: tol_dim
+  value: 0.05
+  unit: mm
+  used_by:
+  - H26
+- symbol: tol_fillet_radius
+  value: 0.05
+  unit: mm
+  used_by:
+  - H34
+  - H36
+- symbol: tol_angle
+  value: 1.0
+  unit: deg
+  used_by:
+  - H26
+  - H52
+  - H53
+- symbol: tol_chamfer_angle
+  value: 0.5
+  unit: deg
+  used_by:
+  - H35
+  - H36
+- symbol: tol_draft_zero
+  value: 0.5
+  unit: deg
+  used_by:
+  - H21
+- symbol: tol_axis
+  value: 0.5
+  unit: deg
+  used_by:
+  - H09
+  - H48
+- symbol: t_normal_entry
+  value: 1.0
+  unit: deg
+  used_by:
+  - H27

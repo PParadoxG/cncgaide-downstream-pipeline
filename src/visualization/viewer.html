@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CNCgAIde · Feature / CAD review</title>
+<link rel="stylesheet" href="web/style.css">
+<script>
+  // Applied before first paint so the page never flashes the wrong theme.
+  document.documentElement.dataset.theme = localStorage.getItem('tempVisualTheme') || 'light';
+  document.documentElement.dataset.line = localStorage.getItem('gatherSeedLine') === 'nx' ? 'nx' : 'occ';
+</script>
+<script src="vendor/layout-base.js"></script>
+<script src="vendor/cose-base.js"></script>
+<script src="vendor/cytoscape.min.js"></script>
+<script src="vendor/cytoscape-fcose.js"></script>
+<script type="importmap">
+{ "imports": { "three": "./vendor/three.module.js" } }
+</script>
+</head>
+<body>
+
+<header class="topbar">
+  <a class="brand" href="index.html" title="Home"><svg class="brand-home" viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 8.2 8 3.2l5.5 5v5.3h-3.6V9.9H6.1v3.6H2.5z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>CNCgAIde</a>
+  <div class="segmented compact line-seg" id="line-seg" data-active="0" style="--segments: 2" title="Kernel line">
+    <span class="seg-thumb" aria-hidden="true"></span>
+  </div>
+  <select id="part-select" class="mono" title="Part"></select>
+
+  <div class="spacer"></div>
+
+  <div class="toolbar">
+    <a class="btn" id="find-similar" href="index.html?view=similarity" title="Rank the other parts by graph edit distance to this one">Find similar</a>
+    <button class="btn" data-action="fit" title="Frame the selection, or the whole part (F)">Fit</button>
+
+    <span class="switch-group">
+      <button class="switch" role="switch" aria-checked="false" data-action="isolate" title="Show only the current selection (I)">
+        <span class="switch-label">Isolate</span>
+        <span class="switch-track"><span class="switch-thumb"></span></span>
+      </button>
+      <button class="switch" role="switch" aria-checked="false" data-action="edges" title="B-Rep edge overlay (E)">
+        <span class="switch-label">Edges</span>
+        <span class="switch-track"><span class="switch-thumb"></span></span>
+      </button>
+    </span>
+
+    <button id="theme-toggle" class="icon-btn" title="Light / dark"></button>
+  </div>
+</header>
+
+<div class="banner" id="store-banner" hidden></div>
+
+<main class="workspace" id="workspace">
+
+  <section class="pane pane-graph" id="pane-graph">
+    <div class="pane-head">
+      <input id="graph-search" type="search" placeholder="find feature…" spellcheck="false">
+      <select id="graph-layout" title="Layout">
+        <option value="grouped">Grouped</option>
+        <option value="fcose">Force</option>
+        <option value="concentric">Concentric</option>
+      </select>
+    </div>
+    <div class="type-filter" id="type-filter"></div>
+    <div class="type-filter relation-filter" id="relation-filter"></div>
+    <div class="graph-canvas" id="cy"></div>
+  </section>
+
+  <div class="splitter" id="splitter-1"></div>
+
+  <section class="pane pane-3d" id="pane-3d">
+    <div class="viewport" id="viewport">
+      <div class="viewport-tip" id="viewport-tip"></div>
+    </div>
+  </section>
+
+  <div class="splitter" id="splitter-2"></div>
+
+  <aside class="side-stack" id="side-stack">
+    <section class="pane pane-inspector">
+      <div class="inspector-body" id="inspector"></div>
+    </section>
+    <div class="splitter row" id="splitter-3"></div>
+    <section class="pane pane-heuristics" id="heuristics"></section>
+  </aside>
+
+</main>
+
+<div class="loading" id="loading"><span class="spin"></span>loading…</div>
+
+<script type="module" src="web/main.js"></script>
+</body>
+</html>

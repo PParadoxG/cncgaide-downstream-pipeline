@@ -1,0 +1,1288 @@
+root:
+  name: ManufacturingFeature
+  label_en: Manufacturing feature
+  label_de: Fertigungsfeature
+  definition_en: Information item identifying a type of feature necessary to manufacture a machined part. In the sense of
+    VDI 2218, a feature is a technical information item representing regions of special (technical) interest of a product.
+    Belongs to exactly one part variant.
+  definition_de: Informationstechnisches Element, das einen zur Fertigung eines zerspanten Bauteils erforderlichen Featuretyp
+    identifiziert. Im Sinne der VDI 2218 ist ein Feature ein informationstechnisches Element, das Bereiche von besonderem
+    (technischem) Interesse eines Produkts darstellt. Gehoert zu genau einer PartVariant.
+  source: ISO 10303-224:2006, 4.2.129 (Manufacturing_feature); VDI 2218:2003 (Feature-Definition nach WEB96)
+  iso14649: two5D_manufacturing_feature / machining_feature
+  comment_en: 'Typing is defined by the subclass hierarchy: five family classes (Hole, Recess, Boss, EdgeTreatment, Surface)
+    with 19 leaf classes, plus the leaf class Step directly below the root. A feature instance belongs to exactly one leaf
+    class.'
+  v31: kept
+page_groups:
+- title: Hole
+  classes:
+  - ThroughHole
+  - BlindHole
+  - Counterbore
+  - Countersink
+  - StepBore
+- title: Recess
+  classes:
+  - RectangularSlot
+  - TriangularSlot
+  - CircularSlot
+  - GeneralSlot
+  - RectangularPocket
+  - GeneralPocket
+  - ThroughCut
+- title: Boss
+  classes:
+  - CircularBoss
+  - RectangularBoss
+  - GeneralBoss
+- title: EdgeTreatment
+  classes:
+  - Chamfer
+  - Fillet
+- title: Surface
+  classes:
+  - PlanarFace
+  - FreeformFace
+- title: Standalone leaves
+  classes:
+  - Step
+families:
+- name: Hole
+  parent: ManufacturingFeature
+  label_en: Hole
+  label_de: Bohrung
+  definition_en: Machining feature constituting the removal of a cylindrical volume from the part.
+  definition_de: Zerspanungsfeature, das die Entfernung eines zylindrischen Volumens aus dem Bauteil darstellt.
+  source: ISO 10303-224:2006, 4.2.111 (Hole), 4.2.212 (Round_hole)
+  iso14649: round_hole
+  v31: kept
+- name: Recess
+  parent: ManufacturingFeature
+  label_en: Recess
+  label_de: Vertiefung
+  definition_en: Family of removal features bounded by a principal wall band and cut along a single machining feed direction;
+    partitioned by bottom condition and opening form into floored closed cavities (the Pocket leaves), through cavities (ThroughCut)
+    and open longitudinal channels (the Slot leaves).
+  definition_de: null
+  source: 'IIT-Arbeitsdefinition (2026-07-28); Normharmonisierung: kein Norm-Pendant'
+  iso14649: '(structural; children: slot, pocket, through-bottom pocket)'
+  v31: changed
+- name: Boss
+  parent: ManufacturingFeature
+  label_en: Boss
+  label_de: Boss (Erhebung)
+  definition_en: Closed shape that protrudes from the surface of the part; family class partitioned into CircularBoss, RectangularBoss
+    and GeneralBoss following AP224.
+  definition_de: Geschlossene Form, die aus der Bauteiloberflaeche herausragt. Familienklasse mit den Blattklassen CircularBoss,
+    RectangularBoss und GeneralBoss (vollstaendige Partition nach Grundrissform, AP224-Unterteilung).
+  source: ISO 10303-224:2006, 4.2.11 (Boss)
+  iso14649: boss (Oberbegriff)
+  v31: kept
+- name: EdgeTreatment
+  parent: ManufacturingFeature
+  label_en: Edge treatment
+  label_de: Kantenbehandlung
+  definition_en: Transition area between two surfaces; unlike machining features it requires no orientation for placement.
+  definition_de: Uebergangsbereich zwischen zwei Flaechen; benoetigt im Unterschied zu Zerspanungsfeatures keine Orientierung
+    zur Platzierung (Kantenbehandlung).
+  source: ISO 10303-224:2006, 4.2.258 (Transition_feature)
+  iso14649: transition_feature
+  v31: kept
+- name: Surface
+  parent: ManufacturingFeature
+  label_en: Surface
+  label_de: Flaeche
+  definition_en: Superclass of surface features.
+  definition_de: Oberklasse der Flaechenfeatures.
+  source: 'IIT-Arbeitsdefinition (2026-07-28); Normharmonisierung: kein Norm-Pendant'
+  iso14649: (strukturell)
+  v31: kept
+leaves:
+- name: ThroughHole
+  family: Hole
+  abbr: TH
+  label_en: Through hole
+  label_de: Durchgangsbohrung
+  definition_en: Cylindrical removal volume whose cylindrical wall is bounded at both ends by complete closed loops that open
+    to the outside of the part.
+  definition_de: null
+  criteria_en:
+  - The carrier face is a single cylindrical face facing away from the material.
+  - That cylindrical face has exactly two boundary loops, both complete and not truncated by other geometry.
+  - 'Both loops are proven open: the section interior point moved axially outward past each loop is classified as outside
+    the solid.'
+  owned_faces_en: The cylindrical wall face itself only. The planes of the entry and exit faces do not belong to this feature; each is registered as a separate face node.
+  notes_en:
+  - '<b><code>machining_direction</code> is not published</b>: a through hole has no unique starting face and the feed direction cannot be recovered. The axis is carried by <code>feature_axis</code>, undirected.'
+  - The through-hole test runs before the blind-hole one, but faces are claimed only once both ends are confirmed open.
+  - Where a through hole is later proven to belong to a compound hole, its node is reclaimed and replaced by the compound hole's node.
+  source: ISO 10303-224:2006, 4.2.212 (Round_hole) mit Through_bottom_condition
+  iso14649: round_hole (bottom_condition = through_bottom_condition)
+  v31: kept
+  attributes:
+  - name: cadFaceIds
+    definition_en: The feature owns a single active face, the cylindrical wall; recorded here are the source face ids that wall corresponded to before the merge.
+    notes_en: []
+    unpublished_when_en: null
+  - name: pos
+    definition_en: The <b>axial mid-point</b>, that is the mid-point of the axial span of the cylindrical wall.
+    notes_en: []
+    unpublished_when_en: null
+  - name: feature_axis
+    definition_en: Axis of the cylindrical face itself, normalised with a positive dominant component.
+    notes_en:
+    - Undirected. Coaxial, parallel and perpendicular criteria use this attribute directly, written the same way as on every other class that publishes an axis.
+    unpublished_when_en: null
+  - name: depth
+    definition_en: <b>Axial span of the cylindrical wall itself</b> - neither measured from the entry face, nor the distance between the two opening planes.
+    notes_en:
+    - Where the two end faces of the hole are not parallel, or the entry is chamfered, the span of the wall and the distance between the two surfaces of the part are not equal.
+    unpublished_when_en: null
+  - name: diameter
+    definition_en: Twice the radius of the cylindrical wall.
+    notes_en: []
+    unpublished_when_en: null
+  - name: derived_min_wall_thickness
+    definition_en: Rays are cast from sample points on the hole wall towards the material side until they first hit a face that <b>does not belong to this feature</b>; the minimum over all sampled rays is taken.
+    notes_en:
+    - Samples that hit a face of this feature itself are always discarded.
+    - It answers how much material is left against breakthrough sideways, which is a different question from the margin in the direction of the bottom.
+    unpublished_when_en: The rays hit no other surface.
+  - name: derived_ratio_depth_to_diameter
+    definition_en: <code>depth / diameter</code>.
+    notes_en: []
+    unpublished_when_en: null
+- name: BlindHole
+  family: Hole
+  abbr: BH
+  label_en: Blind hole
+  label_de: Sackbohrung
+  definition_en: Cylindrical removal volume that opens to the outside of the part at one end and is closed by material at
+    the other end, forming a bottom.
+  definition_de: null
+  criteria_en:
+  - The carrier face is a single cylindrical face facing away from the material, with two complete boundary loops.
+  - One boundary loop is proven open, the other proven capped.
+  - The faces connected at the capped end form the bottom region of the hole.
+  owned_faces_en: The cylindrical wall face and the faces of the bottom region.
+  notes_en:
+  - A blind hole has a unique entry, so <code>machining_direction</code> is published; the floor thickness is measured along it.
+  source: ISO 10303-224:2006, 4.2.212 (Round_hole) mit Blind_bottom_condition (4.2.9); Flat_hole_bottom 4.2.83, Conical_hole_bottom
+    4.2.43
+  iso14649: round_hole (bottom_condition = flat_hole_bottom | conical_hole_bottom)
+  v31: kept
+  attributes:
+  - name: cadFaceIds
+    definition_en: Source face ids of every face of the cylindrical wall and of the bottom region.
+    notes_en: []
+    unpublished_when_en: null
+  - name: pos
+    definition_en: The <b>centre of the floor circle</b>, that is the root centre.
+    notes_en:
+    - On a flat bottom it is <b>where the axis meets the bottom face</b>; on a conical bottom it is the <b>cone apex</b>, the deepest point on that axis.
+    - Nothing is published where the bottom region has some other form, or where several bottom faces give reference points that disagree; no approximation such as a bounding-box centre is substituted.
+    unpublished_when_en: The bottom region is neither all planar nor all conical, or several bottom faces give inconsistent reference points.
+  - name: feature_axis
+    definition_en: Axis of the cylindrical face itself, normalised with a positive dominant component.
+    notes_en: []
+    unpublished_when_en: null
+  - name: machining_direction
+    definition_en: Along the axis, from the opening towards the floor.
+    notes_en: []
+    unpublished_when_en: null
+  - name: depth
+    definition_en: <b>Axial span of the cylindrical wall itself.</b>
+    notes_en:
+    - <b>The conical bottom is not included.</b> Where the bottom is a standard drill point this value differs from the total depth to the deepest point by roughly 0.3 diameters, a difference that shifts the depth-to-diameter ratio by an order of magnitude.
+    unpublished_when_en: null
+  - name: diameter
+    definition_en: Twice the radius of the cylindrical wall.
+    notes_en: []
+    unpublished_when_en: null
+  - name: hole_bottom_type
+    definition_en: Controlled classification of the geometry of the bottom region.
+    notes_en:
+    - <code>flat</code> where every bottom face is planar; <code>rounded</code> where all are spherical or toroidal; the matching standard drill-point value where all are conical and the included angle lies within 118°±1 or 135°±1. Any other combination publishes no classification and is not rounded to the nearest one.
+    unpublished_when_en: The bottom geometry falls under none of the controlled values above.
+  - name: derived_floor_thickness
+    definition_en: Distance between the bottom and the first opposite surface found from the bottom along <code>machining_direction</code>.
+    notes_en: []
+    unpublished_when_en: No reliable opposite surface was found from the bottom along the feed direction.
+  - name: derived_min_wall_thickness
+    definition_en: Minimum hit distance of rays cast from the hole wall towards the material side, excluding samples that hit a face of this feature itself.
+    notes_en:
+    - 'Answers a different question from <code>derived_floor_thickness</code>: breakthrough sideways as against breakthrough at the bottom.'
+    unpublished_when_en: The rays hit no other surface.
+  - name: derived_ratio_depth_to_diameter
+    definition_en: <code>depth / diameter</code>, the numerator being the axial span of the wall without the conical bottom.
+    notes_en: []
+    unpublished_when_en: null
+- name: Counterbore
+  family: Hole
+  abbr: CBR
+  label_en: Counterbore
+  label_de: Zylindersenkung
+  definition_en: Compound hole consisting of a base cylindrical hole and a coaxial cylindrical counterbore section of larger
+    diameter, the two sections joined by a real internal annular shoulder.
+  definition_de: null
+  criteria_en:
+  - Two cylindrical hole nodes share one infinite axis line.
+  - The enlarged section is the one with the larger diameter; its axial interval lies outside the base interval.
+  - 'A real annular shoulder face connects both cylinder walls: base wall CONVEX, section wall CONCAVE at the shoulder.'
+  - The base hole retains its own opening or bottom; the compound consumes both component nodes.
+  - The section wall has two complete rims, one capped by the shoulder and one open.
+  - diameter and depth are carried by the base hole; depth is the total axial extent of the compound.
+  - Countersink resolution runs first; a hole consumed by a Countersink does not take part in Counterbore matching.
+  owned_faces_en: The base-hole faces, the counterbore section faces and the shoulder face. The original hole node is reclaimed and no longer appears on its own.
+  notes_en:
+  - Conical holes are resolved before countersunk ones. Once a hole has been consumed by a conical hole it no longer takes part in countersink matching.
+  - '<b>Dimensioning convention</b>: <code>diameter</code> is always carried by the base hole and <code>depth</code> is always the total axial extent of the feature, while the size of the enlarged section is carried by the section''s own attributes. The length of the base-hole section itself equals <code>depth − counterbore_depth</code>, a subtraction to be done where it is needed rather than an attribute of its own.'
+  - 'The attribute set <b>does not say whether the base hole is through or blind</b>: <code>hole_bottom_type</code> and <code>derived_floor_thickness</code> are not in the attribute set of a compound hole.'
+  source: ISO 10303-224:2006, 4.2.46 (Counterbore_hole)
+  iso14649: counterbore_hole (compound_feature)
+  v31: kept
+  attributes:
+  - name: cadFaceIds
+    definition_en: Source face ids of all three parts - base hole, counterbore section and shoulder - including the faces owned by the reclaimed component nodes.
+    notes_en: []
+    unpublished_when_en: null
+  - name: pos
+    definition_en: The <b>centre of the base-hole bottom circle</b>, that is where the base-hole axis meets the end of the base hole.
+    notes_en: []
+    unpublished_when_en: null
+  - name: feature_axis
+    definition_en: Axis of the base hole, normalised with a positive dominant component.
+    notes_en: []
+    unpublished_when_en: null
+  - name: machining_direction
+    definition_en: Along the axis, from the outer opening into the material.
+    notes_en: []
+    unpublished_when_en: null
+  - name: depth
+    definition_en: <b>Total axial extent</b> from the outer opening to the end of the base hole, counterbore section included.
+    notes_en:
+    - That is the length the base-hole drill has to stand out to enter from the surface of the part.
+    unpublished_when_en: null
+  - name: diameter
+    definition_en: Diameter of the <b>base hole</b>. The diameter of the enlarged section is carried separately by <code>counterbore_diameter</code>.
+    notes_en: []
+    unpublished_when_en: null
+  - name: counterbore_diameter
+    definition_en: Diameter of the enlarged cylindrical counterbore section.
+    notes_en: []
+    unpublished_when_en: null
+  - name: counterbore_depth
+    definition_en: Axial depth of the enlarged counterbore section from its own entry plane, that is the distance from the outer opening to the shoulder.
+    notes_en:
+    - The value has to be strictly smaller than <code>depth</code>, or the candidate does not hold.
+    unpublished_when_en: null
+  - name: derived_min_wall_thickness
+    definition_en: Minimum hit distance of rays cast from the walls of the base hole and of the counterbore section towards the material side.
+    notes_en: []
+    unpublished_when_en: The rays hit no other surface.
+  - name: derived_ratio_depth_to_diameter
+    definition_en: <code>depth / diameter</code>, the same formula as on the other three Hole leaves.
+    notes_en: []
+    unpublished_when_en: null
+- name: Countersink
+  family: Hole
+  abbr: CSK
+  label_en: Countersink
+  label_de: Kegelsenkung
+  definition_en: Compound hole consisting of a base cylindrical hole and a coaxial conical enlargement.
+  definition_de: null
+  criteria_en:
+  - A cylindrical hole node and a conical face share one infinite axis line.
+  - The conical face widens towards the opening and is adjacent to the base wall at its narrow rim.
+  - The conical segment has two complete circular boundaries.
+  - The compound consumes the base hole node.
+  - diameter and depth are carried by the base hole; depth is the total axial extent.
+  - Countersink resolution precedes Counterbore resolution.
+  owned_faces_en: The base-hole faces and the conical section faces. The original hole node is reclaimed.
+  notes_en:
+  - Conical holes are resolved before countersunk ones, so geometry satisfying both criteria goes to the conical hole.
+  - 'The dimensioning convention is exactly the one used for the countersunk hole: <code>diameter</code> is carried by the base hole, <code>depth</code> is the total length, and the section attributes describe the enlarged section.'
+  - The three quantities of the conical section, <code>{major diameter, included angle, section depth}</code>, have only two degrees of freedom and satisfy <code>(D − d) / 2 = h · tan(α / 2)</code>. The two that can be measured directly from the boundaries are therefore kept, and the included angle is expressed as a derived attribute.
+  source: ISO 10303-224:2006, 4.2.47 (Countersunk_hole)
+  iso14649: countersunk_hole (compound_feature)
+  v31: kept
+  attributes:
+  - name: cadFaceIds
+    definition_en: Source face ids of the base hole and of the conical section.
+    notes_en: []
+    unpublished_when_en: null
+  - name: pos
+    definition_en: The <b>centre of the base-hole bottom circle</b>, that is where the base-hole axis meets the end of the base hole.
+    notes_en: []
+    unpublished_when_en: null
+  - name: feature_axis
+    definition_en: Axis of the base hole, normalised with a positive dominant component.
+    notes_en: []
+    unpublished_when_en: null
+  - name: machining_direction
+    definition_en: Along the axis, from the outer opening into the material.
+    notes_en: []
+    unpublished_when_en: null
+  - name: depth
+    definition_en: <b>Total axial extent</b> from the outer opening to the end of the base hole, conical section included.
+    notes_en: []
+    unpublished_when_en: null
+  - name: diameter
+    definition_en: Diameter of the <b>base hole</b>.
+    notes_en: []
+    unpublished_when_en: null
+  - name: countersink_diameter
+    definition_en: Major diameter at the entry of the conical countersink, that is twice the larger of the two circular boundary radii of the cone face.
+    notes_en: []
+    unpublished_when_en: null
+  - name: countersink_depth
+    definition_en: Axial depth of the conical section from the outer opening to the small end, where it meets the base hole.
+    notes_en:
+    - 'A direct boundary measurement: the difference between the axial coordinates of the two circular boundaries of the conical section.'
+    unpublished_when_en: null
+  - name: derived_countersink_angle
+    definition_en: <b>Included angle</b> of the countersink measured between opposite generatrices, obtained from <code>2 · atan((countersink_diameter − diameter) / (2 · countersink_depth))</code>.
+    notes_en:
+    - <b>Not the half angle.</b> It is recovered from the trigonometry rather than asserted a second time as an independently measured attribute.
+    unpublished_when_en: null
+  - name: derived_min_wall_thickness
+    definition_en: Minimum hit distance of rays cast from the walls of the base hole and of the conical section towards the material side.
+    notes_en: []
+    unpublished_when_en: The rays hit no other surface.
+  - name: derived_ratio_depth_to_diameter
+    definition_en: <code>depth / diameter</code>.
+    notes_en: []
+    unpublished_when_en: null
+- name: StepBore
+  family: Hole
+  abbr: SBR
+  label_en: Step bore
+  label_de: null
+  definition_en: Non-terminal cylindrical section of a multi-step coaxial hole. Its major end opens either to the outside
+    of the part or into the preceding section of larger diameter; its minor end is closed by an annular shoulder that caps
+    only the annular gap, the centre being continued by the following section of smaller diameter.
+  definition_de: null
+  criteria_en:
+  - The carrier face is a single cylindrical face facing away from the material, with two complete boundary loops.
+  - The major-end loop is proven open, or joins a coaxial cylindrical section of larger diameter.
+  - The minor-end loop is capped by a real internal annular planar shoulder whose far side joins a coaxial cylindrical section
+    of smaller diameter.
+  - The coaxial run of pure cylindrical sections it belongs to has at least three members, and it is not the terminal member.
+  - By the orientation axiom the largest-diameter end of the run is the entry; the major end of this section is the one facing
+    that entry.
+  owned_faces_en: The cylindrical wall face and the annular shoulder face at its small end.
+  notes_en:
+  - A purely cylindrical stepped hole of x sections decomposes into x−1 step-bore sections plus one terminal hole (<code>ThroughHole</code> or <code>BlindHole</code>). The faces the sections own do not overlap, and together they tile the whole hole exactly.
+  - 'The attribute set <b>contains neither <code>hole_bottom_type</code> nor <code>derived_floor_thickness</code></b>: the small end is an annular shoulder, not a bottom - the material only closes the annular gap, and the two bottom attributes are undefined for this class. This is the same principle by which the attribute set of a countersunk hole does not say whether the base hole is through or blind.'
+  - A stepped hole of <b>exactly two</b> sections does not belong to this class - it is a <code>Counterbore</code>; a <b>single</b>-section hole is a <code>ThroughHole</code> or a <code>BlindHole</code>.
+  source: ISO 10303-224:2006, 4.2.212 (Round_hole); the step section itself has no separate clause in AP224, so this class is defined by this ontology
+  iso14649: round_hole (one section of a stepped bore)
+  v31: new
+  attributes:
+  - name: cadFaceIds
+    definition_en: Source face ids of every face of the cylindrical wall and of the annular shoulder at the small end.
+    notes_en: []
+    unpublished_when_en: null
+  - name: pos
+    definition_en: The <b>centre of the shoulder plane at the small end</b>, that is the root centre of the section.
+    notes_en:
+    - 'The same convention as taking the centre of the bottom circle on a blind hole: the reference point sits at the root of the section, not at its opening.'
+    unpublished_when_en: The shoulder at the small end is not planar, or several shoulder faces give inconsistent reference points.
+  - name: feature_axis
+    definition_en: Axis of the cylindrical face itself, normalised with a positive dominant component.
+    notes_en: []
+    unpublished_when_en: null
+  - name: machining_direction
+    definition_en: Along the axis, from the large end towards the shoulder at the small end.
+    notes_en:
+    - 'The direction is fixed by the orientation axiom: axial removal requires the diameter to be non-increasing along the feed direction, so the end with the largest diameter is the only one the tool can enter.'
+    unpublished_when_en: null
+  - name: depth
+    definition_en: <b>Axial span of this section's own cylindrical wall</b>, that is the net depth of the section.
+    notes_en:
+    - Not the total depth of the whole stepped hole. The depth of the whole hole is the sum of the sections' <code>depth</code>, and the ontology does not add an attribute for it.
+    unpublished_when_en: null
+  - name: diameter
+    definition_en: Twice the radius of this section's cylindrical wall.
+    notes_en: []
+    unpublished_when_en: null
+  - name: derived_min_wall_thickness
+    definition_en: Minimum hit distance of rays cast from this section's hole wall towards the material side, excluding samples that hit a face of this feature itself.
+    notes_en: []
+    unpublished_when_en: The rays hit no other surface.
+  - name: derived_ratio_depth_to_diameter
+    definition_en: <code>depth / diameter</code>, the numerator being this section's own axial span.
+    notes_en: []
+    unpublished_when_en: null
+- name: RectangularSlot
+  family: Recess
+  abbr: RSL
+  label_en: Rectangular slot
+  label_de: null
+  definition_en: Open swept removal volume extending along a course and open to the outside of the part at both ends; its
+    cross-section consists of three planar faces, the middle one being a floor perpendicular to the feature axis, each side
+    wall having a draft relative to the feature axis that is stable within the face.
+  definition_de: null
+  criteria_en:
+  - 'Proven open sweep structure with transverse terminal criterion: both effective material-side relations are CONVEX.'
+  - 'Both ends proven open by B-Rep solid classification: the section interior point moved outward along the course is outside
+    the part.'
+  - The cross-section consists of exactly three planar faces.
+  - The middle face is the floor and is perpendicular to the feature axis.
+  - The draft of each side wall relative to the feature axis is stable within the face (it need not be zero).
+  owned_faces_en: The principal swept face only. Transverse supports, the supports at the two ends of the course and any transition faces passed on the way are all left unclaimed.
+  notes_en:
+  - <b>The two side walls need not be parallel.</b> Each may carry its own draft, in which case the opening width and the bottom width differ and the draft angle is non-zero; a straight-walled slot is the degenerate case of zero draft, where the two station widths are equal.
+  - The depth is measured along the <b>transverse down-cut direction</b>, not along the longitudinal course. The reference is the mouth chord joining the mid-points of the two transverse terminal rails.
+  - 'Recognition and measurement are independent of each other: a slot whose attributes cannot be measured is still registered as a slot.'
+  source: ISO 10303-224:2006, 4.2.224 (Slot); ISO 14649-10 slot with square_u_profile; Working definition (2026-08-21)
+  iso14649: slot (its_profile = square_u_profile)
+  v31: new
+  attributes:
+  - name: cadFaceIds
+    definition_en: Source face ids of the principal swept face only.
+    notes_en: []
+    unpublished_when_en: null
+  - name: pos
+    definition_en: The <b>geometric centre of the floor</b>, that is the root centre.
+    notes_en: []
+    unpublished_when_en: null
+  - name: feature_axis
+    definition_en: The line along the transverse down-cut direction, normalised with a positive dominant component.
+    notes_en:
+    - This direction is the cross-section direction, <b>not the longitudinal course of the slot</b>.
+    unpublished_when_en: null
+  - name: machining_direction
+    definition_en: Along the axis, from the mouth towards the floor.
+    notes_en: []
+    unpublished_when_en: null
+  - name: depth
+    definition_en: From the mouth chord to the floor, measured along the transverse direction above.
+    notes_en: []
+    unpublished_when_en: null
+  - name: min_opening_width
+    definition_en: Spacing between the two side walls at the <b>mouth station</b>, that is the chord between the mid-points of the two transverse terminal rails, taking the component perpendicular to the course.
+    notes_en: []
+    unpublished_when_en: null
+  - name: min_bottom_width
+    definition_en: Spacing between the two side walls at the <b>bottom station</b>, measured along the mouth chord direction.
+    notes_en:
+    - The difference from the opening width reflects the draft. Equal widths make it a straight-walled slot with no draft.
+    unpublished_when_en: null
+  - name: max_wall_draft_angle
+    definition_en: The <b>largest</b> absolute draft angle of the two side walls. <b>A value of 0 means the walls are strictly perpendicular.</b>
+    notes_en:
+    - The draft angle is obtained on each wall face from its outward normal relative to the feature axis. The two side walls may carry different drafts, so the quantity cannot be derived exactly from the two station widths and the depth, and is kept alongside them.
+    unpublished_when_en: null
+  - name: course_length
+    definition_en: Length of the course along the sweep direction.
+    notes_en: []
+    unpublished_when_en: null
+  - name: derived_min_wall_thickness
+    definition_en: Minimum hit distance of rays cast from the <b>two side walls</b> towards the material side, excluding samples that hit a face of this feature itself.
+    notes_en:
+    - 'Only the side walls are sampled, not the floor: the material left in the direction of the floor is a different question.'
+    unpublished_when_en: The rays hit no other surface.
+  - name: derived_ratio_depth_to_min_width
+    definition_en: <code>depth / min(min_opening_width, min_bottom_width)</code>.
+    notes_en:
+    - 'The denominator is the smaller of the two stations: where draft widens the feature outwards, it is the bottom width that constrains the tool, not the opening width.'
+    unpublished_when_en: null
+- name: TriangularSlot
+  family: Recess
+  abbr: TSL
+  label_en: Triangular slot
+  label_de: null
+  definition_en: Open swept removal volume whose cross-section consists of exactly two non-coplanar planar faces meeting at
+    an apex rail.
+  definition_de: null
+  criteria_en:
+  - Proven open sweep structure and transverse terminal criterion as for RectangularSlot.
+  - Both ends proven open.
+  - The cross-section consists of exactly two planar faces.
+  - The two faces are not coplanar and meet at a single straight apex rail.
+  owned_faces_en: The principal swept face only.
+  notes_en:
+  - '<b>The depth is the perpendicular component</b>: measured against the mouth chord joining the mid-points of the two transverse terminal rails, the depth is the perpendicular distance from the apex rail to that chord. The oblique vector from the mouth to the apex is not taken as the depth.'
+  - '<b>No bottom width is published</b>: the bottom of a V slot is an apex rail, so the bottom width is always 0, which falls outside the value space <code>&gt; 0</code>. That is not applicable, not unmeasurable.'
+  - '<b>No draft angle is published</b>: the two side walls are themselves inclined faces, so "draft relative to the axis" and <code>v_included_angle</code> describe the same thing.'
+  source: ISO 10303-224:2006, 4.2.224 (Slot); ISO 14649-10 slot with vee_profile; Working definition (2026-08-21)
+  iso14649: slot (its_profile = vee_profile)
+  v31: new
+  attributes:
+  - name: cadFaceIds
+    definition_en: Source face ids of the two principal swept faces only.
+    notes_en: []
+    unpublished_when_en: null
+  - name: pos
+    definition_en: The <b>deepest location</b>, that is the mid-point of the apex rail.
+    notes_en: []
+    unpublished_when_en: null
+  - name: feature_axis
+    definition_en: The line along the perpendicular from the mouth chord to the apex rail, normalised with a positive dominant component.
+    notes_en: []
+    unpublished_when_en: null
+  - name: machining_direction
+    definition_en: Along the axis, from the mouth towards the apex rail.
+    notes_en: []
+    unpublished_when_en: null
+  - name: depth
+    definition_en: Perpendicular distance from the apex rail to the mouth chord.
+    notes_en: []
+    unpublished_when_en: null
+  - name: min_opening_width
+    definition_en: Mouth chord length, that is the distance between the mid-points of the two transverse terminal rails.
+    notes_en: []
+    unpublished_when_en: null
+  - name: v_included_angle
+    definition_en: <b>Included angle</b> between the two side wall planes, that is the dihedral angle on the open side measured along the apex rail.
+    notes_en:
+    - 'Obtained as the supplement of the angle between the outward normals of the two side walls: coplanar walls give 180° and form no V slot.'
+    - The two side walls <b>may be asymmetric</b>, so <code>{opening width, depth}</code> does not determine the shape and a third quantity is needed. On a symmetric V slot it can be derived from width and depth; on an asymmetric one it cannot.
+    unpublished_when_en: null
+  - name: course_length
+    definition_en: Length of the course along the sweep direction.
+    notes_en: []
+    unpublished_when_en: null
+  - name: derived_min_wall_thickness
+    definition_en: Minimum hit distance of rays cast from the two side wall faces towards the material side.
+    notes_en: []
+    unpublished_when_en: The rays hit no other surface.
+  - name: derived_ratio_depth_to_min_width
+    definition_en: <code>depth / min_opening_width</code>.
+    notes_en:
+    - A V slot has only one width station, so the denominator is the opening width.
+    unpublished_when_en: null
+- name: CircularSlot
+  family: Recess
+  abbr: CSL
+  label_en: Circular slot
+  label_de: null
+  definition_en: Open swept removal volume whose cross-section bottom is a single cylindrical face with its axis parallel
+    to the course; side walls may be absent or present as a pair of parallel undrafted planar faces, tangent or non-tangent
+    to the bottom arc.
+  definition_de: null
+  criteria_en:
+  - Proven open sweep structure and transverse terminal criterion as for RectangularSlot.
+  - Both ends proven open.
+  - The bottom of the cross-section is a single cylindrical face whose axis is parallel to the course.
+  - Side walls, if present, are a pair of parallel planar faces without draft.
+  - The seam between side wall and bottom arc may be tangent or non-tangent.
+  owned_faces_en: The principal swept face only.
+  notes_en:
+  - '<b>A tangent seam is not required.</b> Tangency plus parallel side walls means the cylinder is inscribed in both walls at once and the bottom arc radius is always half the opening width; but <b>planar wall + non-tangent partial arc bottom + planar wall</b> is a real machining form, with an edge at the seam. Admitting it makes <code>profile_radius</code> an independently measured attribute: <code>r = w / 2</code> in the tangent sub-case, independent otherwise.'
+  - A strict half circle formed by a single cylindrical face is the doubly degenerate case of <code>r = w / 2</code> and <code>depth = r</code>, and belongs to this class as well.
+  - '<b>No draft angle is published, and the criterion does not admit drafted side walls either</b>: the side walls may be absent altogether (the half-circle degenerate case), and this class''s attribute set has no place to carry draft. A circular slot with draft belongs to <code>GeneralSlot</code>.'
+  source: ISO 10303-224:2006, 4.2.224 (Slot); ISO 14649-10 slot with partial_circular_profile / rounded_u_profile; Working definition (2026-08-21)
+  iso14649: slot (its_profile = partial_circular_profile | rounded_u_profile)
+  v31: new
+  attributes:
+  - name: cadFaceIds
+    definition_en: Source face ids of the principal swept face only.
+    notes_en: []
+    unpublished_when_en: null
+  - name: pos
+    definition_en: The <b>deepest location</b>, that is the mid-point of the lowest generatrix.
+    notes_en: []
+    unpublished_when_en: null
+  - name: feature_axis
+    definition_en: The line along the direction from the mouth chord to the lowest generatrix, normalised with a positive dominant component.
+    notes_en: []
+    unpublished_when_en: null
+  - name: machining_direction
+    definition_en: Along the axis, from the mouth towards the lowest generatrix.
+    notes_en: []
+    unpublished_when_en: null
+  - name: depth
+    definition_en: Distance from the mouth chord to the lowest generatrix. In the strict half-circle case it equals the cylinder radius.
+    notes_en: []
+    unpublished_when_en: null
+  - name: min_opening_width
+    definition_en: Chord length at the mouth. Where parallel side walls exist, the distance between the two planes.
+    notes_en: []
+    unpublished_when_en: null
+  - name: profile_radius
+    definition_en: Radius of the cylindrical bottom face.
+    notes_en:
+    - <b>An independently measured attribute, not a derived one.</b> It equals half the opening width where the seam is tangent, and is independent where it is not.
+    unpublished_when_en: null
+  - name: course_length
+    definition_en: Length of the course along the sweep direction.
+    notes_en: []
+    unpublished_when_en: null
+  - name: derived_min_wall_thickness
+    definition_en: Minimum hit distance of rays cast from the principal faces of the cross-section towards the material side.
+    notes_en:
+    - The side wall and the bottom arc of a circular slot may be one and the same cylindrical face, so the sampled faces of this class do not distinguish side wall from bottom.
+    unpublished_when_en: The rays hit no other surface.
+  - name: derived_ratio_depth_to_min_width
+    definition_en: <code>depth / min_opening_width</code>.
+    notes_en: []
+    unpublished_when_en: null
+- name: GeneralSlot
+  family: Recess
+  abbr: GSL
+  label_en: General slot
+  label_de: null
+  definition_en: Valid open swept removal volume whose cross-section has a unique deepest location but does not belong to
+    the rectangular, triangular or circular form.
+  definition_de: null
+  criteria_en:
+  - Proven open sweep structure and transverse terminal criterion as for RectangularSlot.
+  - Both ends proven open.
+  - The cross-section has a unique deepest location.
+  - The cross-section satisfies none of the RectangularSlot, TriangularSlot or CircularSlot criteria.
+  owned_faces_en: The principal swept face only.
+  notes_en:
+  - '<b>This class carries no form-specific quantity at all</b>: the attribute set holds only the quantities the family defines for any cross-section. Width, draft and bottom arc radius are all outside it, because none of them is defined on an arbitrary cross-section.'
+  - A form that belongs to no named sub-leaf but whose structure holds belongs to this class; where the structure itself does not hold, no node is produced.
+  source: ISO 10303-224:2006, 4.2.224 (Slot); ISO 14649-10 slot with general_profile; Working definition (2026-08-21)
+  iso14649: slot (its_profile = general_profile)
+  v31: new
+  attributes:
+  - name: cadFaceIds
+    definition_en: Source face ids of the principal swept face only.
+    notes_en: []
+    unpublished_when_en: null
+  - name: pos
+    definition_en: The <b>deepest location</b>, that is the boundary point furthest from the mouth chord.
+    notes_en: []
+    unpublished_when_en: null
+  - name: feature_axis
+    definition_en: The line along the direction from the mouth chord to the deepest location, normalised with a positive dominant component.
+    notes_en:
+    - The definition of the deepest location does not depend on the cross-section classification, so this class publishes the direction and the depth as well.
+    unpublished_when_en: null
+  - name: machining_direction
+    definition_en: Along the axis, from the mouth towards the deepest location.
+    notes_en: []
+    unpublished_when_en: null
+  - name: depth
+    definition_en: Distance from the mouth chord to the deepest location.
+    notes_en: []
+    unpublished_when_en: null
+  - name: course_length
+    definition_en: Length of the course along the sweep direction.
+    notes_en: []
+    unpublished_when_en: null
+  - name: derived_min_wall_thickness
+    definition_en: Minimum hit distance of rays cast from the two side walls of the cross-section towards the material side.
+    notes_en: []
+    unpublished_when_en: The rays hit no other surface.
+- name: RectangularPocket
+  family: Recess
+  abbr: RPK
+  label_en: Rectangular pocket
+  label_de: null
+  definition_en: Floored removal cavity enclosed by a closed band of side walls whose two principal contours, projected into
+    the feature frame, are both quadrilaterals with four 90-degree corners; the corners may carry a radius.
+  definition_de: null
+  criteria_en:
+  - Closed principal wall band proven by the side-wall-band analysis with a resolvable band frame.
+  - The terminal region is a floor (not a second opening).
+  - Both principal contours (opening rim and floor rim) are resolvable.
+  - Both projected contours are quadrilaterals with four 90-degree corners and opposite walls parallel and equal; a corner
+    may be blended.
+  - The cavity is not a Slot (no open ends along a course).
+  owned_faces_en: The side walls of the principal wall band and the terminal floor region. Transition faces are recorded but not claimed.
+  notes_en:
+  - '<b>The criterion has to say "both" principal contours</b>: judging the opening alone would wrongly admit pockets with a rounded floor.'
+  - '<b>The criterion does not ask whether the corners are sharp</b>: a zero-radius internal corner cannot be milled, so splitting leaf classes by sharpness would make this class denote a shape that does not occur on a machined part, and push every real rounded-corner pocket into <code>GeneralPocket</code>. The corner radius is a <b>measurement</b>, published as an attribute, where 0 means a genuine sharp corner.'
+  - The width is measured <b>wall to wall</b>, so whether the corners are filleted does not affect the result.
+  - 'Recognition does not require the terminal region to be one clean floor face: a pocket whose floor is made of several faces is still registered, only the four floor-related attributes may go unpublished.'
+  source: ISO 10303-224:2006, 4.2.177 (Pocket); ISO 14649-10 closed_pocket with rectangular_closed_profile; Working definition (2026-08-21)
+  iso14649: closed_pocket (feature_boundary = rectangular_closed_profile)
+  v31: new
+  attributes:
+  - name: cadFaceIds
+    definition_en: Source face ids of the side walls and of the bottom region. <b>Transition faces between the mouth and the bottom are not among them.</b>
+    notes_en: []
+    unpublished_when_en: null
+  - name: pos
+    definition_en: The <b>geometric centre of the base contour</b>, that is the root centre.
+    notes_en:
+    - Taken from the base contour, never substituting the centroid of the opening contour.
+    unpublished_when_en: The base contour cannot be resolved, or its centroid is unreliable.
+  - name: feature_axis
+    definition_en: The line along the normal of the opening contour plane, normalised with a positive dominant component.
+    notes_en: []
+    unpublished_when_en: null
+  - name: machining_direction
+    definition_en: Along the axis, from the opening towards the bottom.
+    notes_en: []
+    unpublished_when_en: null
+  - name: depth
+    definition_en: 'Axial distance from the opening plane to the floor. <b>Published only where the terminal region forms a single fixed axial layer</b>: every floor face planar, perpendicular to the feature axis, and lying on one axial layer.'
+    notes_en:
+    - 'Where the floor spans several axial layers the largest is not taken: when a pocket shows several floor layers the others most likely do not belong to this pocket, and taking the largest would count a neighbouring feature''s floor as this one''s.'
+    unpublished_when_en: The terminal region contains faces that do not face the opening, or the floor spans several axial layers and no floor belongs uniquely to this feature.
+  - name: min_opening_width
+    definition_en: Perpendicular distance between opposite sides of the opening contour, the smaller of the two spans.
+    notes_en: []
+    unpublished_when_en: null
+  - name: min_bottom_width
+    definition_en: Perpendicular distance between opposite sides of the base contour.
+    notes_en:
+    - The difference from the opening width reflects the draft. The measurement runs wall to wall, so whether the corners are filleted does not affect the result.
+    unpublished_when_en: null
+  - name: max_wall_draft_angle
+    definition_en: The <b>largest</b> absolute draft angle over all relevant wall faces. <b>A value of 0 means the walls are strictly perpendicular.</b>
+    notes_en:
+    - The walls may carry different drafts, so it cannot be derived exactly from the two station widths and the depth, and is kept alongside them.
+    unpublished_when_en: null
+  - name: pocket_bottom_type
+    definition_en: 'Classification of the bottom region: <code>flat</code> where every face is planar, <code>non_flat</code> where none is, <code>mixed</code> where both occur.'
+    notes_en:
+    - 'The precondition is that <b>the terminal region is cleanly separated from adjacent geometry</b>: every terminal face must genuinely face the opening, and otherwise no assertion is made about the bottom at all.'
+    - <code>mixed</code> describes planar and non-planar faces coexisting on <b>one floor layer</b>, not a floor on several layers.
+    unpublished_when_en: The terminal region contains faces that do not face the opening and is not cleanly separated from adjacent geometry.
+  - name: derived_floor_thickness
+    definition_en: Distance between the bottom and the first opposite surface found from the bottom along <code>machining_direction</code>; <b>measured only where the floor has a single fixed depth</b>.
+    notes_en: []
+    unpublished_when_en: The floor does not have a single fixed depth, or no reliable opposite surface was found.
+  - name: derived_min_wall_thickness
+    definition_en: Minimum hit distance of rays cast from the side walls towards the material side, excluding samples that hit a face of this feature itself.
+    notes_en:
+    - 'Answers a different question from the floor thickness: breakthrough sideways as against breakthrough at the bottom.'
+    unpublished_when_en: The rays hit no other surface.
+  - name: derived_ratio_depth_to_min_width
+    definition_en: <code>depth / min(min_opening_width, min_bottom_width)</code>.
+    notes_en: []
+    unpublished_when_en: The depth or either station width is unavailable.
+  - name: min_corner_radius
+    definition_en: Smallest radius over the <b>union</b> of all concave corners of the two principal contours. <b>A value of 0 means a genuine sharp corner.</b>
+    notes_en:
+    - The corners of this class <b>may be filleted</b>, so the value is not always 0 - it is the corner radius this rectangular pocket was actually made with, and the most direct manufacturability quantity the class has.
+    - The internal angle of a corner is accumulated over the whole turn, so the angle read out is the same whether the corner is modelled sharp or filleted; whether it passed through a fillet is recorded separately, and the radius is judged zero or non-zero from that.
+    - Only the two contours of the principal band itself take part in the computation. The chamfer at the mouth and the fillet at the floor are transitions, are not claimed by this feature, and contribute no corner here.
+    unpublished_when_en: One principal contour cannot be resolved into a single closed loop; or every concave corner is filleted and the face carrying the radius lies outside the principal wall band.
+  - name: min_corner_angle
+    definition_en: Smallest <b>internal angle</b> over the union of all concave corners of the two principal contours.
+    notes_en:
+    - 'The criterion of this class requires all four corners to be 90°, so wherever the criterion holds the value is <b>always 90</b>: publishing it is an independent re-check of the criterion, not an observation that varies. Anyone reading the H statistics should know that a verdict conditioned on this value and attached to this class necessarily passes.'
+    - 'Two degenerate cases are excluded explicitly: the <b>free segment</b> (the turns cancel, the internal angle is 180°, and it discriminates nothing) and the <b>full reversal</b> (a turn of 180°, an internal angle computed as 0°, outside the value space).'
+    unpublished_when_en: One principal contour cannot be resolved; or every concave corner is a degenerate case and forms no angle.
+  - name: derived_ratio_min_corner_radius_to_depth
+    definition_en: <code>min_corner_radius / depth</code>.
+    notes_en: []
+    unpublished_when_en: Either the corner radius or the depth is unavailable.
+- name: GeneralPocket
+  family: Recess
+  abbr: GPK
+  label_en: General pocket
+  label_de: null
+  definition_en: Floored removal cavity enclosed by a closed band of side walls that is structurally valid but does not satisfy
+    the RectangularPocket shape criterion.
+  definition_de: null
+  criteria_en:
+  - Closed principal wall band proven by the side-wall-band analysis with a resolvable band frame.
+  - The terminal region is a floor (not a second opening).
+  - Both principal contours are resolvable.
+  - At least one projected contour is not a four-right-angle quadrilateral with matching opposite walls.
+  - The cavity is not a Slot.
+  owned_faces_en: The side walls of the principal wall band and the terminal floor region. Transition faces are recorded but not claimed.
+  notes_en:
+  - '<b>No width quantity is published</b>: "the perpendicular distance between opposite sides" is undefined on an arbitrary contour. That is not applicable, not unmeasurable. <b>The class therefore does not receive a width attribute at all</b> - an attribute slot that is always empty would dress a structural non-applicability up as a measurement gap.'
+  - <b>No further subdivision.</b> A finer split by shape would fragment the class space, and no difference in attribute sets supports it.
+  - 'The corner attributes take their minimum over the <b>union of the two principal contours</b>: on a drafted pocket the smallest radius occurs at the floor, and reading the opening alone would miss it. A contour with no concave corner is a normal case; but where a contour <b>cannot be resolved</b> the whole attribute is withheld - taking the minimum over what is left would yield a minimum that never covered the whole feature, which is a wrong number rather than an incomplete one.'
+  source: ISO 10303-224:2006, 4.2.177 (Pocket); ISO 14649-10 closed_pocket with general_closed_profile; Working definition (2026-08-21)
+  iso14649: closed_pocket (feature_boundary = general_closed_profile)
+  v31: new
+  attributes:
+  - name: cadFaceIds
+    definition_en: Source face ids of the side walls and of the bottom region.
+    notes_en: []
+    unpublished_when_en: null
+  - name: pos
+    definition_en: The <b>geometric centre of the base contour</b>.
+    notes_en: []
+    unpublished_when_en: The base contour cannot be resolved, or its centroid is unreliable.
+  - name: feature_axis
+    definition_en: The line along the normal of the opening contour plane, normalised with a positive dominant component.
+    notes_en: []
+    unpublished_when_en: null
+  - name: machining_direction
+    definition_en: Along the axis, from the opening towards the bottom.
+    notes_en: []
+    unpublished_when_en: null
+  - name: depth
+    definition_en: Axial distance from the opening plane to the floor, <b>published only where the terminal region forms a single fixed axial layer</b>.
+    notes_en: []
+    unpublished_when_en: The terminal region contains faces that do not face the opening, or the floor spans several axial layers.
+  - name: min_corner_radius
+    definition_en: Smallest radius over the <b>union</b> of all concave corners of the two principal contours. <b>A value of 0 means a genuine sharp corner.</b>
+    notes_en:
+    - The internal angle of a corner is accumulated over the whole turn, so the angle read out is the same whether the corner is modelled sharp or filleted; whether it passed through a fillet is recorded separately, and the radius is judged zero or non-zero from that.
+    - Only the two contours of the principal band itself take part in the computation. The chamfer at the mouth and the fillet at the floor are transitions, are not claimed by this feature, and contribute no corner here.
+    unpublished_when_en: One principal contour cannot be resolved into a single closed loop; or every concave corner is filleted and the face carrying the radius lies outside the principal wall band.
+  - name: min_corner_angle
+    definition_en: Smallest <b>internal angle</b> over the union of all concave corners of the two principal contours.
+    notes_en:
+    - 'Two degenerate cases are excluded explicitly: the <b>free segment</b> (the turns cancel, the internal angle is 180°, and it discriminates nothing) and the <b>full reversal</b> (a turn of 180°, an internal angle computed as 0°, outside the value space).'
+    unpublished_when_en: One principal contour cannot be resolved; or every concave corner is a degenerate case and forms no angle.
+  - name: max_wall_draft_angle
+    definition_en: The largest absolute draft angle over all relevant wall faces.
+    notes_en: []
+    unpublished_when_en: null
+  - name: pocket_bottom_type
+    definition_en: Classification of the bottom region, on the precondition that the terminal region is cleanly separated from adjacent geometry.
+    notes_en: []
+    unpublished_when_en: The terminal region contains faces that do not face the opening.
+  - name: derived_floor_thickness
+    definition_en: Distance from the floor to the first opposite surface along the feed direction, measured only where the floor has a single fixed depth.
+    notes_en: []
+    unpublished_when_en: The floor does not have a single fixed depth, or no reliable opposite surface was found.
+  - name: derived_min_wall_thickness
+    definition_en: Minimum hit distance of rays cast from the side walls towards the material side.
+    notes_en: []
+    unpublished_when_en: The rays hit no other surface.
+  - name: derived_ratio_min_corner_radius_to_depth
+    definition_en: <code>min_corner_radius / depth</code>.
+    notes_en: []
+    unpublished_when_en: Either the corner radius or the depth is unavailable.
+- name: ThroughCut
+  family: Recess
+  abbr: TCT
+  label_en: Through cut
+  label_de: Durchbruch (Fenster)
+  definition_en: 'Removal cavity enclosed by a closed band of side walls that genuinely passes through the part: its terminal
+    region is a second opening rather than a floor.'
+  definition_de: null
+  criteria_en:
+  - Closed principal wall band proven by the side-wall-band analysis.
+  - Both terminal regions are proven open by B-Rep solid classification.
+  - The band has exactly two openings and no floor.
+  - The band frame is resolvable.
+  - The cavity is not a Slot.
+  owned_faces_en: The side walls and the faces belonging to the two end openings.
+  notes_en:
+  - '<b><code>machining_direction</code> is not published</b>: the two openings are geometrically equal in rank, so there is no unique entry and the feed direction cannot be recovered.'
+  - '<b>No <code>depth</code></b>: a through cavity has no axial depth. The distance between the two openings is the wall thickness of the part at that place, which is a part-level quantity rather than a feature-level one.'
+  - '<b>No <code>pocket_bottom_type</code></b>: that attribute needs a floor.'
+  - The axis is taken from the normal of the plane fitted to one of the opening loops of the principal wall band. Where the two openings lie on <b>non-parallel</b> outer surfaces, picking a different loop gives a different plane, and in that case the axis is not uniquely determined.
+  - 'In the through-path proof a sample point lying on the surface - neither inside nor outside - is treated as undetermined rather than as material: an interior point hugging the wall of a thin cut grazes the surface. But where no sample point can be determined to lie outside the material, nothing is confirmed either.'
+  source: ISO 10303-224:2006, 4.2.50 (Cutout)
+  iso14649: 'pocket mit bottom_condition = through_pocket_bottom_condition; AP224: Cutout'
+  v31: 'kept (parent changed: Breakthrough -> Recess)'
+  attributes:
+  - name: cadFaceIds
+    definition_en: Source face ids of the side walls and of the faces belonging to the two end openings.
+    notes_en: []
+    unpublished_when_en: null
+  - name: pos
+    definition_en: The <b>axial mid-point</b>, that is the mid-point between the centroids of the two opening contours.
+    notes_en:
+    - The two openings are equal in rank, so the point is unique and does not depend on picking one of the two ends.
+    unpublished_when_en: Either of the two opening contours has no reliable centroid.
+  - name: feature_axis
+    definition_en: The line along the normal of the opening contour plane, normalised with a positive dominant component.
+    notes_en:
+    - 'Undirected: entry and exit are decided by the traversal order of the band and carry no machining semantics, so no sign is kept.'
+    unpublished_when_en: null
+  - name: min_corner_radius
+    definition_en: Smallest radius over the union of all concave corners of the two principal contours. <b>A value of 0 means a genuine sharp corner.</b>
+    notes_en:
+    - 'Computed the same way as for a pocket: a cavity that breaks through the bottom is a pocket with its floor removed, and both correspond to the same question.'
+    unpublished_when_en: One principal contour cannot be resolved; or every concave corner is filleted and the face carrying the radius lies outside the principal wall band.
+  - name: min_corner_angle
+    definition_en: Smallest <b>internal angle</b> over the union of all concave corners of the two principal contours.
+    notes_en:
+    - '<b>A full reversal is not a corner</b>: the end of an obround window joins two parallel walls by a semicircle, the boundary turns through 180° and the internal angle computes as 0° - a value that both falls outside the value space and claims an extremely sharp internal corner where the two walls never converge. Such turns are excluded from the angle minimum; their end radius is carried by <code>min_corner_radius</code> as usual.'
+    unpublished_when_en: Every concave corner on the two principal contours is a full reversal or a free segment and forms no angle.
+  - name: max_wall_draft_angle
+    definition_en: The largest absolute draft angle over all relevant wall faces.
+    notes_en: []
+    unpublished_when_en: null
+  - name: derived_min_wall_thickness
+    definition_en: Minimum hit distance of rays cast from the side wall towards the material side.
+    notes_en:
+    - 'It holds for through features too: the material left sideways of a through cut still means something.'
+    unpublished_when_en: The rays hit no other surface.
+- name: CircularBoss
+  family: Boss
+  abbr: CBS
+  label_en: Circular boss
+  label_de: Zylindrischer Boss (Dom)
+  definition_en: Solid protrusion rising from a support face and enclosed by a closed side wall band; both station contours
+    are complete circles. The side wall may be cylindrical or conical.
+  definition_de: null
+  criteria_en:
+  - Closed side wall band rising from a support face (material side CONCAVE at the base, CONVEX at the top).
+  - A resolvable top region exists.
+  - Both station contours (base and top) are resolvable.
+  - Both station contours are complete circles.
+  - The support face is not owned by the boss.
+  owned_faces_en: 'The side walls and the top region. The support face the boss stands on is <b>not</b> claimed: it belongs to the part, not to the protrusion.'
+  notes_en:
+  - <b>The feed direction points into the material</b>, that is from the top towards the support face. This is machining semantics, and it is the reverse of the bottom-up direction in which the shape is built.
+  - <b>The draft angle is a derived quantity.</b> A circular boss is axisymmetric, so the draft angle is fixed exactly by the two station diameters and the height, for <b>every</b> instance of the class, and is therefore not asserted a second time as an independently measured attribute.
+  source: ISO 10303-224:2006, 4.2.24 (Circular_boss)
+  iso14649: 'boss: round_boss'
+  v31: kept
+  attributes:
+  - name: cadFaceIds
+    definition_en: Source face ids of the side walls and of the top region.
+    notes_en: []
+    unpublished_when_en: null
+  - name: pos
+    definition_en: The <b>centroid of the support-face footprint</b>, that is the centre on which the boss stands.
+    notes_en: []
+    unpublished_when_en: null
+  - name: feature_axis
+    definition_en: The line along the normal of the base contour plane, normalised with a positive dominant component.
+    notes_en: []
+    unpublished_when_en: null
+  - name: machining_direction
+    definition_en: Along the axis, from the top towards the support face, that is <b>into the material</b>.
+    notes_en: []
+    unpublished_when_en: null
+  - name: height
+    definition_en: Axial rise from the base contour plane to the top contour.
+    notes_en:
+    - Measured <b>contour to contour</b> rather than as the span of the side wall itself, so that a cylindrical wall and a tapered wall give a result of the same kind.
+    unpublished_when_en: The top contour is spread over several axial layers and there is no single height.
+  - name: base_diameter
+    definition_en: Diameter of the base contour circle.
+    notes_en: []
+    unpublished_when_en: null
+  - name: top_diameter
+    definition_en: Diameter of the top contour circle.
+    notes_en:
+    - Equal to the base diameter makes it a cylindrical boss; unequal makes it a tapered one.
+    unpublished_when_en: null
+  - name: derived_wall_draft_angle
+    definition_en: <code>atan((base_diameter − top_diameter) / 2 / height)</code>.
+    notes_en:
+    - 'A circular boss is axisymmetric and the derivation holds exactly for every instance, so it is expressed as a derived attribute. This is unlike a rectangular boss, whose four walls may carry different drafts while the thickness reflects only the shortest-side direction: there the derivation is inexact, so the draft angle stays an independent measurement.'
+    unpublished_when_en: null
+  - name: derived_min_clearance
+    definition_en: Rays are cast from sample points on the <b>outer side walls</b> of the boss towards the air side until they first hit another face of the part; the minimum is taken.
+    notes_en:
+    - 'The direction is the reverse of the remaining wall thickness of a removal feature: the ray runs along the outward normal through air, and whether it hits anything depends on whether the part has structure opposite.'
+    unpublished_when_en: The outward rays hit no other face of the part.
+- name: RectangularBoss
+  family: Boss
+  abbr: RBS
+  label_en: Rectangular boss
+  label_de: Rechteckiger Boss (Steg/Rippe)
+  definition_en: 'Solid protrusion rising from a support face and enclosed by a closed side wall band; both station contours
+    are rectangles: four pairwise matched straight edges joined by four right angles, which may carry a radius.'
+  definition_de: null
+  criteria_en:
+  - Closed side wall band rising from a support face.
+  - A resolvable top region exists.
+  - Both station contours are resolvable.
+  - Both station contours are rectangles with four right angles, blended or sharp.
+  - Both stations belong to the same shape family.
+  owned_faces_en: The side walls and the top region. The support face is not claimed.
+  notes_en:
+  - <b>The draft angle is an independently measured attribute.</b> The four walls may carry different drafts while the thickness reflects only the shortest-side direction, so the derivation does not hold exactly for every instance.
+  - 'The thickness is measured wall to wall, so whether the corners are filleted does not affect the result. <b>The shape classification does not ask about sharpness either</b>: splitting leaf classes by sharpness would make this class denote a shape that does not occur on a machined part.'
+  - 'The two stations <b>must be of one family</b>: a boss with a round base and a rectangular top belongs to <code>GeneralBoss</code>, which is what keeps the <code>base_*</code> / <code>top_*</code> attribute pairs defined everywhere inside the class.'
+  source: ISO 10303-224:2006, 4.2.194 (Rectangular_boss)
+  iso14649: 'boss: rectangular_boss'
+  v31: kept
+  attributes:
+  - name: cadFaceIds
+    definition_en: Source face ids of the side walls and of the top region.
+    notes_en: []
+    unpublished_when_en: null
+  - name: pos
+    definition_en: The centroid of the support-face footprint.
+    notes_en: []
+    unpublished_when_en: null
+  - name: feature_axis
+    definition_en: The line along the normal of the base contour plane, normalised with a positive dominant component.
+    notes_en: []
+    unpublished_when_en: null
+  - name: machining_direction
+    definition_en: Along the axis, from the top towards the support face, that is into the material.
+    notes_en: []
+    unpublished_when_en: null
+  - name: height
+    definition_en: Axial rise from the base contour plane to the top contour, measured contour to contour.
+    notes_en: []
+    unpublished_when_en: The top contour is spread over several axial layers.
+  - name: base_thickness
+    definition_en: '<b>Smallest transverse dimension</b> of the base contour: the smaller of the perpendicular distances between opposite sides.'
+    notes_en: []
+    unpublished_when_en: null
+  - name: top_thickness
+    definition_en: Smallest transverse dimension of the top contour.
+    notes_en: []
+    unpublished_when_en: null
+  - name: max_wall_draft_angle
+    definition_en: The largest absolute draft angle over the four wall faces.
+    notes_en:
+    - The walls may carry different drafts while the thickness reflects only the shortest-side direction, so it is kept alongside the two station thicknesses.
+    unpublished_when_en: null
+  - name: derived_min_clearance
+    definition_en: Minimum hit distance of rays cast from the outer side walls of the boss towards the air side.
+    notes_en: []
+    unpublished_when_en: The outward rays hit no other face of the part.
+  - name: derived_ratio_height_to_thickness
+    definition_en: <code>height / min(base_thickness, top_thickness)</code>, the slenderness ratio.
+    notes_en:
+    - The denominator is the smaller of the two stations, the same rule as for the depth-to-width ratio.
+    unpublished_when_en: null
+- name: GeneralBoss
+  family: Boss
+  abbr: GBS
+  label_en: General boss
+  label_de: Allgemeiner Boss
+  definition_en: Solid protrusion rising from a support face and enclosed by a closed side wall band whose two station contours
+    belong to different shape families, or to the same family without matching any named shape.
+  definition_de: null
+  criteria_en:
+  - Closed side wall band rising from a support face with a resolvable top region.
+  - Both station contours are resolvable (an unresolvable contour yields no node, never a GeneralBoss).
+  - The pair of contours satisfies neither the CircularBoss nor the RectangularBoss criterion.
+  owned_faces_en: The side walls and the top region. The support face is not claimed.
+  notes_en:
+  - Where a contour <b>cannot be resolved</b> no node is produced at all, and nothing is assigned to this class by default. Stating an uncertain result as a settled conclusion is wrong.
+  - 'This class carries no form-specific quantity, only the ones common to the family: there is no width quantity, so the draft angle cannot be derived from anything and is necessarily an independently measured attribute.'
+  source: ISO 10303-224:2006, 4.2.89 (General_boss)
+  iso14649: 'boss: general_boss'
+  v31: kept
+  attributes:
+  - name: cadFaceIds
+    definition_en: Source face ids of the side walls and of the top region.
+    notes_en: []
+    unpublished_when_en: null
+  - name: pos
+    definition_en: The centroid of the support-face footprint; the contour may be any closed shape.
+    notes_en: []
+    unpublished_when_en: null
+  - name: feature_axis
+    definition_en: The line along the normal of the base contour plane, normalised with a positive dominant component.
+    notes_en: []
+    unpublished_when_en: null
+  - name: machining_direction
+    definition_en: Along the axis, from the top towards the support face, that is into the material.
+    notes_en: []
+    unpublished_when_en: null
+  - name: height
+    definition_en: Axial rise from the base contour plane to the top contour.
+    notes_en: []
+    unpublished_when_en: The top contour is spread over several axial layers.
+  - name: max_wall_draft_angle
+    definition_en: The largest absolute draft angle over all wall faces.
+    notes_en: []
+    unpublished_when_en: null
+  - name: derived_min_clearance
+    definition_en: Minimum hit distance of rays cast from the outer side walls of the boss towards the air side.
+    notes_en: []
+    unpublished_when_en: The outward rays hit no other face of the part.
+- name: Chamfer
+  family: EdgeTreatment
+  abbr: CHF
+  label_en: Chamfer
+  label_de: Fase
+  definition_en: Transition region between two faces whose cross-section is a straight line; geometrically a planar or conical
+    face set.
+  definition_de: null
+  criteria_en:
+  - A transition region proposed by per-face evidence and connected in the active model.
+  - The region passes connectivity and topology validation and has two distinct supporting faces.
+  - Every face of the region is planar or conical.
+  owned_faces_en: The faces of the transition region itself. These faces were deliberately left unclaimed by the manufacturing-feature recognition that ran earlier.
+  notes_en:
+  - '<b>This class publishes no axis</b>: an edge treatment runs along an edge, and there is no unique axis.'
+  - '<b>Planar and conical chamfers are not split apart.</b> The two measurement paths differ - the planar one goes through the dihedral angle of the supporting faces, the conical one through two complete circular boundaries - but the definition of <code>min_chamfer_angle</code> is the same for both: the two supports of a conical chamfer are the hole wall (parallel to the axis) and the end face (perpendicular to it), so the smallest acute angle automatically equals <code>min(half angle, 90° − half angle)</code>.'
+  - '<b>An accepted under-determination</b>: <code>{chamfer_width, min_chamfer_angle}</code> are two quantities while the chamfer cross-section triangle has three degrees of freedom, the missing one being the dihedral angle between the two supporting faces. On a chamfer along a 90° edge the two quantities suffice to reconstruct it; along a non-90° edge they do not. Reconstructing the cross-section completely is not the goal of this attribute set - describing it robustly is.'
+  source: ISO 10303-224:2006, 4.2.22 (Chamfer)
+  iso14649: chamfer (transition_feature)
+  v31: kept
+  attributes:
+  - name: cadFaceIds
+    definition_en: Source face ids of every face in this connected transition region. A chamfer commonly spans several faces.
+    notes_en: []
+    unpublished_when_en: null
+  - name: pos
+    definition_en: The <b>area centroid</b> of this transition region.
+    notes_en:
+    - 'The start point of the guide curve is not used: the direction of an edge depends on the order the exporter wrote it, and a closed chamfer band running once around the part has no start point at all.'
+    unpublished_when_en: null
+  - name: chamfer_width
+    definition_en: Distance between the two boundary curves measured along the cross-section of the chamfer face, that is the <b>slant width</b> of the transition.
+    notes_en: []
+    unpublished_when_en: Neither two measurable transition boundaries nor the planar principal extents are available.
+  - name: min_chamfer_angle
+    definition_en: The <b>smaller</b> of the two acute angles between the chamfer face and its <b>two supporting references</b>.
+    notes_en:
+    - <b>Not the included angle of the cone.</b> On a conical chamfer it equals <code>min(half angle, 90° − half angle)</code>.
+    - 'Candidates are taken only from the <b>set of supporting faces</b> that the topological verification of this transition region has already settled, never from every neighbouring face outside it: a long chamfer band may border many segment faces, and without that restriction the minimum could land on a face that forms no cross-section triangle at all.'
+    - The two supports giving unequal angles is a normal case (an asymmetric chamfer); the smaller is taken and publication is not refused because of it.
+    unpublished_when_en: The supporting faces yield no valid acute angle inside <code>(0°, 90°)</code>.
+- name: Fillet
+  family: EdgeTreatment
+  abbr: FLT
+  label_en: Fillet
+  label_de: Verrundung
+  definition_en: Circular-arc blend transition region between two faces.
+  definition_de: null
+  criteria_en:
+  - A transition region proposed by per-face evidence and connected in the active model.
+  - The region passes connectivity and topology validation and has two distinct supporting faces.
+  - The region geometry is a circular blend (cylindrical, toroidal or spherical blend faces).
+  owned_faces_en: The faces of the transition region itself.
+  notes_en:
+  - '<b>This class publishes no axis</b>: an edge treatment runs along an edge, and there is no unique axis.'
+  - '<b>A variable-radius blend is still a blend</b>: recognition is not refused because the radius is not unique, and no separate leaf class is created for it - that would only turn one unpublished quantity into two.'
+  source: ISO 10303-224:2006, 4.2.81 (Fillet); 4.2.73 (Edge_round)
+  iso14649: edge_round (transition_feature)
+  v31: kept
+  attributes:
+  - name: cadFaceIds
+    definition_en: Source face ids of every face in this connected transition region.
+    notes_en: []
+    unpublished_when_en: null
+  - name: pos
+    definition_en: The <b>area centroid</b> of this transition region.
+    notes_en: []
+    unpublished_when_en: null
+  - name: fillet_radius
+    definition_en: Actual radius of this circular blend face.
+    notes_en:
+    - '<b>No average is taken</b>: an invented average radius would be used downstream as a real one. Where several resolved radius candidates contradict each other, nothing is published either.'
+    unpublished_when_en: The transition region contains a surface that cannot be shown to hold one radius, or several resolved radius candidates disagree.
+- name: PlanarFace
+  family: Surface
+  abbr: PLF
+  label_en: Planar face
+  label_de: Planflaeche
+  definition_en: Residual bounded planar face feature that belongs to no manufacturing feature.
+  definition_de: null
+  criteria_en:
+  - A face left unclaimed after all manufacturing features and compound replacements are resolved.
+  - The surface type is a plane.
+  - The face has a valid non-zero area.
+  owned_faces_en: The face itself.
+  notes_en:
+  - 'One active face, one node. <b>Coplanar faces are not merged globally</b>: whether to merge is a normalisation decision taken in the parsing stage, and is not repeated at this level.'
+  - The residual registration deliberately runs last, and never competes with a manufacturing feature or a compound replacement for ownership of a face.
+  - '<b>No axis is published</b>: the face normal and the feature feed direction are two concepts. The normal is carried separately by <code>surface_normal</code>, and the two point opposite ways - the normal away from the material, the feed direction into it.'
+  source: ISO 10303-224:2006, 4.2.171 (Planar_face)
+  iso14649: planar_face
+  v31: kept
+  attributes:
+  - name: cadFaceIds
+    definition_en: The active face itself only. Where it absorbed coplanar neighbouring faces during the merge stage, their source face ids are listed with it.
+    notes_en: []
+    unpublished_when_en: null
+  - name: pos
+    definition_en: The <b>area centroid</b> of the face.
+    notes_en: []
+    unpublished_when_en: null
+  - name: surface_normal
+    definition_en: The <b>outward normal</b> of the face after its sense has been applied, pointing away from the material; <b>not normalised</b>.
+    notes_en:
+    - 'Unlike <code>feature_axis</code>: this attribute keeps its sign and does not flip the dominant component positive.'
+    unpublished_when_en: The face has no valid normal or outward sense.
+  - name: area
+    definition_en: <b>Area</b> of the bounded face itself.
+    notes_en: []
+    unpublished_when_en: The face has no valid positive area.
+- name: FreeformFace
+  family: Surface
+  abbr: FFF
+  label_en: Freeform face
+  label_de: Freiformflaeche
+  definition_en: Residual non-analytic surface feature that belongs to no manufacturing feature.
+  definition_de: null
+  criteria_en:
+  - A face left unclaimed after all manufacturing features and compound replacements are resolved.
+  - The surface is positively proven non-analytic from its parsed surface parameters (unclassifiable surfaces are rejected,
+    not registered).
+  owned_faces_en: The face itself.
+  notes_en:
+  - <b>Unclassified is not the same as free-form.</b> A surface that cannot be classified is explicitly rejected and the reason recorded; only a surface positively proven non-analytic from its analytic parameters is registered as this class.
+  - '<b>Neither an axis nor a <code>surface_normal</code> is published</b>: a free-form surface has neither a unique axis nor a unique normal.'
+  source: 'IIT-Arbeitsdefinition (2026-07-28); Normharmonisierung: kein Norm-Pendant'
+  iso14649: region (Freiformbearbeitung)
+  v31: kept
+  attributes:
+  - name: cadFaceIds
+    definition_en: The active face itself only.
+    notes_en: []
+    unpublished_when_en: null
+  - name: pos
+    definition_en: The <b>area centroid</b> of the face.
+    notes_en: []
+    unpublished_when_en: null
+  - name: area
+    definition_en: <b>Area</b> of the bounded face itself.
+    notes_en: []
+    unpublished_when_en: The face has no valid positive area.
+- name: Step
+  family: ManufacturingFeature
+  abbr: STP
+  label_en: Step
+  label_de: Stufe
+  definition_en: Simple step formed by two principal faces sharing one internal straight edge, with an included angle smaller
+    than 180 degrees.
+  definition_de: null
+  criteria_en:
+  - Two planar faces share exactly one internal straight edge.
+  - The included angle between the two faces is smaller than 180 degrees.
+  - Neither face belongs to a recess or boss wall band.
+  - Only the two principal faces are owned; all supporting and transition faces stay unclaimed.
+  owned_faces_en: The two principal faces only. Every supporting face and transition face stays unclaimed.
+  notes_en:
+  - 'A Step is not a cavity: it has no surrounding wall and removes no enclosed volume. Complex multi-wall, multi-section or irregular shoulder geometry does <b>not</b> belong to this class.'
+  - <b>No axis is published.</b> A Step is the height difference between two levels. It has no deepest location, so there is no axis in the sense of "the opening pointing at the deepest location". The direction is undefined, so nothing is published.
+  - The direction of the shared straight edge is a uniquely determined line, but it corresponds to the longitudinal course rather than to a depth axis. It is not the same kind of quantity as <code>feature_axis</code> and is therefore not folded into that attribute.
+  - <b>The face extents do not say which one is the "height".</b> On a right-angled step the extent of the upright face is the height, but which face is upright depends on the direction the cut comes from - that is a real property of a step, not a shortcoming of the representation.
+  source: ISO 10303-224:2006, 4.2.232 (Step)
+  iso14649: step
+  v31: kept
+  attributes:
+  - name: cadFaceIds
+    definition_en: Source face ids of the two principal faces only.
+    notes_en: []
+    unpublished_when_en: null
+  - name: pos
+    definition_en: The <b>mid-point of the shared straight edge</b>.
+    notes_en:
+    - 'The start point of the guide curve is not used: the start depends on the parametrisation direction, while the mid-point is unique and independent of it.'
+    unpublished_when_en: null
+  - name: min_face_extent
+    definition_en: The <b>smaller</b> of the distances the two principal faces each extend outwards from the shared straight edge.
+    notes_en:
+    - '<b>The maximum extent is taken inside each face first</b>: a face need not be rectangular, the extent perpendicular to the edge may vary along it, and what counts is the furthest the tool has to travel. The two faces are then ordered by value, independently of the traversal direction.'
+    unpublished_when_en: Either principal face has no measurable boundary samples away from the shared straight edge.
+  - name: max_face_extent
+    definition_en: The <b>larger</b> of the two principal face extents.
+    notes_en: []
+    unpublished_when_en: Either principal face has no measurable boundary samples away from the shared straight edge.
+  - name: step_included_angle
+    definition_en: <b>Included angle</b> between the two principal faces, that is the dihedral angle on the open side measured along the shared straight edge.
+    notes_en:
+    - 'Obtained as the supplement of the angle between the outward normals of the two principal faces: coplanar faces give 180° and form no step, and the smaller the angle the sharper the step.'
+    unpublished_when_en: The two principal faces do not yield two valid plane normals.
+deleted_classes:
+- name: Profile
+  reason_en: A family class; its only subclass OuterContour is not within the recognition scope (deleted in v4.0)
+  replaced_by: null
+- name: OuterContour
+  reason_en: The outer contour is not within the recognition scope (deleted in v4.0)
+  replaced_by: null
+- name: Breakthrough
+  reason_en: Only ThroughCut is left as a subclass, so the family level carries no information; the standard mapping already defines ThroughCut as a through-bottom pocket (catalogue 01 L-1)
+  replaced_by: Recess
+- name: WallBreakthrough
+  reason_en: Not within the recognition scope (deleted in v4.0); its remaining-wall-thickness concern is carried by ThroughCut's derived_min_wall_thickness
+  replaced_by: ThroughCut
+- name: Groove
+  reason_en: The ring groove is not within the recognition scope (deleted in v4.0)
+  replaced_by: null
+- name: ThreadedHole
+  reason_en: A thread cannot be recognised from B-Rep (deleted in v4.0)
+  replaced_by: null
+- name: Slot
+  reason_en: One attribute set cannot cover the differences in cross-section form; split four ways for the honesty of the attribute sets (catalogue 01 §1.1, §1.4)
+  replaced_by: RectangularSlot / TriangularSlot / CircularSlot / GeneralSlot
+- name: Pocket
+  reason_en: As above, split in two (catalogue 01 §1.5); the open pocket is not in the class space, and is_open_state retired with it
+  replaced_by: RectangularPocket / GeneralPocket

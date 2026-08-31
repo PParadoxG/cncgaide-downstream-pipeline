@@ -1,0 +1,46 @@
+head:
+  namespace: nxd
+  authority: pipeline
+  note: A derived attribute must never be published on a node beside NX's own attributes as though NX had said it.
+    It goes in its own block, carrying derivedBy, and in this namespace in the ontology.
+  derivedByTiers:
+    nx_kernel: Measured through KernelServices; needs a live NX session with the part open.
+attributes:
+- authority: pipeline
+  name: derived_floor_thickness
+  derivedBy: nx_kernel
+  node: 20'b
+  range: xsd:decimal
+  unit: Length
+  definition_en: Remaining material below the floor of a pocket-like feature, measured from the floor to the nearest
+    opposing face of the part.
+  kernel_basis: 'One of the six KernelServices methods, already implemented on the NX line. It cannot be answered
+    from attributes: NX publishes the feature''s own depth, never what is underneath it.'
+  used_by:
+  - H11
+  - H28
+  label_en: derived floor thickness
+- authority: pipeline
+  name: derived_min_wall_thickness
+  derivedBy: nx_kernel
+  node: 20'b
+  range: xsd:decimal
+  unit: Length
+  definition_en: Thinnest remaining wall between this feature's surface and the nearest other surface of the part.
+  kernel_basis: KernelServices measurement. Distinct from the clearance relations, which are between two named features;
+    this one is against whatever material happens to be nearest.
+  used_by:
+  - H51
+  label_en: derived minimum wall thickness
+- authority: pipeline
+  name: derived_min_clearance
+  derivedBy: nx_kernel
+  node: 20'b
+  range: xsd:decimal
+  unit: Length
+  definition_en: Shortest distance from this feature to any other material of the part, used where a rule asks whether
+    a tool can reach the feature at all.
+  kernel_basis: KernelServices measurement.
+  used_by:
+  - H37
+  label_en: derived minimum clearance

@@ -1,0 +1,324 @@
+types:
+- id: rel_direct_adjacent
+  label: DIRECT_ADJACENT
+  label_en: Direct adjacency
+  page:
+    ab: DA
+    col: '#546e7a'
+    dir: undirected
+    gov: any two final nodes
+    prop: —
+    def: A face owned by A and a face owned by B <b>share one real B-Rep edge</b>.
+    when:
+    - at least one real B-Rep edge is shared between the faces the two ends own
+    allow_js: () => true
+  definition_en: A face owned by feature A and a face owned by feature B share a real B-Rep edge.
+  comment_en: Undirected. Any two features. No relation property.
+  required_properties: []
+  allowed_pairs:
+  - - ManufacturingFeature
+    - ManufacturingFeature
+  motivated_by:
+  - H30
+  v31: renamed from rel_adjacent_to (criterion tightened to a shared real B-Rep edge)
+- id: rel_located_on
+  label: LOCATED_ON
+  label_en: Located on
+  page:
+    ab: LO
+    col: '#e6a700'
+    dir: undirected in the graph, directed in the evidence
+    gov: source is one of the 14 leaf classes that carry terminals; host is any final node, <b>except Chamfer / Fillet</b>
+    prop: terminals (terminalRole / hostFaceId / hostSurfaceType / hostSurfaceNormal / hostOwner)
+    def: A <b>semantic terminal</b> of a feature - the opening of a hole, the base support of a boss, the transverse terminal of a slot - resolves outward to <b>exactly one</b> host face and its owner. The edge is undirected in the graph; the direction chain is kept in full in the evidence.
+    when:
+    - the semantic terminal of source exists and its boundary (rim / rail / opening) can be resolved
+    - a Chamfer / Fillet met on the way outward is skipped, and the first non-transition face behind it is taken
+    - 'the effective host of that terminal is unique: it does not hold where the host is not unique, or where an unowned face is among the candidates'
+    allow_js: (x, y) => (has(TERMINAL, x) && !has(TRANS, y)) || (has(TERMINAL, y) && !has(TRANS, x))
+  definition_en: A semantic terminal of the source feature (hole opening, boss base support, slot transverse terminal, pocket
+    opening) lies on exactly one effective host face; the relation names that face and the feature owning it. Chamfer and
+    Fillet transitions are never hosts.
+  comment_en: Undirected graph edge; the direction (terminal -> host) is preserved in the terminal records. Not materialised
+    when the effective host is not unique.
+  required_properties: []
+  allowed_pairs:
+  - - Hole
+    - Hole
+  - - Hole
+    - Recess
+  - - Hole
+    - Boss
+  - - Hole
+    - Surface
+  - - Hole
+    - Step
+  - - Recess
+    - Recess
+  - - Recess
+    - Boss
+  - - Recess
+    - Surface
+  - - Recess
+    - Step
+  - - Boss
+    - Boss
+  - - Boss
+    - Surface
+  - - Boss
+    - Step
+  motivated_by:
+  - H13
+  - H22
+  - H26
+  - H27
+  - H30
+  v31: new
+- id: rel_coaxial
+  label: COAXIAL
+  label_en: Coaxial
+  page:
+    ab: CX
+    col: '#00a6a6'
+    dir: undirected
+    gov: Hole↔Hole, Hole↔CircularBoss, CircularBoss↔CircularBoss
+    prop: —
+    def: The <code>feature_axis</code> of the two features is <b>one and the same infinite 3D axis</b>. Adjacency or contact is not required.
+    when:
+    - both ends publish <code>feature_axis</code>
+    - the two axes are parallel, angular tolerance 0.01°
+    - the distance between the two infinite axes is <= 1e-3 mm
+    allow_js: (x, y) => (has(HOLE, x) || x === "CircularBoss") && (has(HOLE, y) || y === "CircularBoss")
+  definition_en: The feature_axis lines of both features are the same infinite 3D line (parallel within 0.01 degree, line
+    distance <= 1e-3 mm). Adjacency or contact is not required.
+  comment_en: Undirected. Hole-Hole, Hole-CircularBoss, CircularBoss-CircularBoss.
+  required_properties: []
+  allowed_pairs:
+  - - Hole
+    - Hole
+  - - Hole
+    - CircularBoss
+  - - CircularBoss
+    - CircularBoss
+  motivated_by:
+  - H13
+  - H30
+  v31: 'renamed from rel_concentric_with (semantics: shared infinite axis line)'
+- id: rel_intersects_with
+  label: INTERSECTS
+  label_en: Intersects
+  page:
+    ab: IX
+    col: '#d1495b'
+    dir: undirected
+    gov: Hole↔Hole
+    prop: crossingAngle (degrees, 0-90)
+    def: The bodies of the two holes <b>genuinely penetrate</b>, proven from the principal wall topology, and the two axes are not parallel.
+    when:
+    - a real B-Rep edge is shared between the CYLINDER principal walls of the two ends
+    - the two axes are not parallel
+    allow_js: (x, y) => has(HOLE, x) && has(HOLE, y)
+  definition_en: 'The solids of two holes genuinely penetrate each other: their cylindrical principal walls share a real B-Rep
+    edge and their axes are not parallel.'
+  comment_en: Undirected. Hole-Hole. Carries crossingAngle.
+  required_properties:
+  - crossingAngle
+  allowed_pairs:
+  - - Hole
+    - Hole
+  motivated_by:
+  - H46
+  v31: kept (criterion tightened to principal-wall topology)
+- id: rel_hole_spacing
+  label: HOLE_SPACING
+  label_en: Hole spacing
+  page:
+    ab: HS
+    col: '#0077b6'
+    dir: undirected
+    gov: Hole↔Hole
+    prop: axisSpacing (mm)
+    def: <b>Axis-to-axis distance</b> between two holes that share a host and whose axes are parallel.
+    when:
+    - the two ends share at least one <code>LOCATED_ON</code> host owner
+    - the two axes are parallel, angular tolerance 1°
+    - the axis spacing exceeds the axis tolerance - a coaxial pair of holes does not hold
+    allow_js: (x, y) => has(HOLE, x) && has(HOLE, y)
+  definition_en: Axis-to-axis distance between two holes that share at least one LOCATED_ON host owner and whose axes are
+    parallel (1 degree tolerance). A coaxial pair has no defined spacing and is not materialised.
+  comment_en: Undirected. Hole-Hole. Carries axisSpacing.
+  required_properties:
+  - axisSpacing
+  allowed_pairs:
+  - - Hole
+    - Hole
+  motivated_by:
+  - H12
+  - H18
+  v31: new (takes over the hole-hole part of rel_has_distance_to)
+- id: rel_pocket_clearance
+  label: POCKET_CLEARANCE
+  label_en: Pocket clearance
+  page:
+    ab: PC
+    col: '#7b2cbf'
+    dir: undirected
+    gov: the two Pocket leaves
+    prop: pocketClearance (mm)
+    def: Minimum distance <b>between the side wall face sets</b> of two pockets that share a host.
+    when:
+    - the two ends share at least one <code>LOCATED_ON</code> host owner
+    - a stable minimum distance can be obtained between the effective side wall face sets of the two ends
+    allow_js: (x, y) => has(POCKET, x) && has(POCKET, y)
+  definition_en: Minimum distance between the side wall face sets of two pockets that share at least one LOCATED_ON host owner.
+  comment_en: Undirected. Pocket leaves. Carries pocketClearance.
+  required_properties:
+  - pocketClearance
+  allowed_pairs:
+  - - RectangularPocket
+    - RectangularPocket
+  - - RectangularPocket
+    - GeneralPocket
+  - - GeneralPocket
+    - GeneralPocket
+  motivated_by:
+  - H15
+  v31: new (takes over the pocket-pocket part of rel_has_distance_to)
+- id: rel_slot_clearance
+  label: SLOT_CLEARANCE
+  label_en: Slot clearance
+  page:
+    ab: SC
+    col: '#2a9d8f'
+    dir: undirected
+    gov: the four Slot leaves
+    prop: slotClearance (mm), courseAngle, courseParallel, transverseAngle
+    def: Minimum distance <b>between the opening boundaries</b> of two slots that share a host.
+    when:
+    - the two ends share at least one <code>LOCATED_ON</code> host owner
+    - a stable minimum distance can be obtained between the opening / cross-section boundaries of the two ends
+    - whether the course directions are parallel does not affect whether it holds
+    allow_js: (x, y) => has(SLOT, x) && has(SLOT, y)
+  definition_en: Minimum distance between the opening boundaries of two slots that share at least one LOCATED_ON host owner;
+    course parallelism does not gate the relation.
+  comment_en: Undirected. Slot leaves. Carries slotClearance.
+  required_properties:
+  - slotClearance
+  allowed_pairs:
+  - - RectangularSlot
+    - RectangularSlot
+  - - RectangularSlot
+    - TriangularSlot
+  - - RectangularSlot
+    - CircularSlot
+  - - RectangularSlot
+    - GeneralSlot
+  - - TriangularSlot
+    - TriangularSlot
+  - - TriangularSlot
+    - CircularSlot
+  - - TriangularSlot
+    - GeneralSlot
+  - - CircularSlot
+    - CircularSlot
+  - - CircularSlot
+    - GeneralSlot
+  - - GeneralSlot
+    - GeneralSlot
+  motivated_by:
+  - H16
+  v31: new (takes over the slot-slot part of rel_has_distance_to)
+properties:
+- name: axisSpacing
+  label_en: axis spacing
+  range: xsd:decimal
+  value_space_en: xsd:decimal, mm, > 0
+  definition_en: Axis-to-axis distance of a HOLE_SPACING relation between two parallel infinite hole axis lines.
+  v31: new
+- name: pocketClearance
+  label_en: pocket clearance
+  range: xsd:decimal
+  value_space_en: xsd:decimal, mm, >= 0
+  definition_en: Minimum distance between the side wall face sets of the two pockets of a POCKET_CLEARANCE relation.
+  v31: new
+- name: slotClearance
+  label_en: slot clearance
+  range: xsd:decimal
+  value_space_en: xsd:decimal, mm, >= 0
+  definition_en: Minimum distance between the opening boundaries of the two slots of a SLOT_CLEARANCE relation.
+  v31: new
+- name: crossingAngle
+  label_en: crossing angle
+  label_de: Kreuzungswinkel
+  range: xsd:decimal
+  value_space_en: xsd:decimal, degrees, > 0 and <= 90
+  definition_en: Crossing angle between the axes of the two intersecting holes of an INTERSECTS relation.
+  v31: kept
+terminal:
+  class: LocatedOnTerminal
+  label_en: Located-on terminal record
+  definition_en: 'One resolved terminal of a LOCATED_ON relation: which semantic terminal of the source feature resolved to
+    which effective host face, the host surface type and normal, and the feature that owns the host face. A LOCATED_ON relation
+    carries one record per resolved terminal.'
+  link_property:
+    name: hasTerminal
+    label_en: has terminal
+    definition_en: Links a LOCATED_ON FeatureRelation to one of its resolved terminal records.
+  fields:
+  - name: terminalRole
+    range: xsd:string
+    value_space_en: 'xsd:string, vocabulary: opening | base | transverse | second_opening'
+    definition_en: Which semantic terminal of the source feature the record describes.
+  - name: hostFaceId
+    range: xsd:string
+    value_space_en: xsd:string, part-model face id
+    definition_en: Identifier of the effective host face in the part model.
+  - name: hostSurfaceType
+    range: xsd:string
+    value_space_en: 'xsd:string, vocabulary: PLANE | CYLINDER | CONE | SPHERE | TORUS | BSPLINE | OTHER'
+    definition_en: Surface type of the effective host face.
+  - name: hostSurfaceNormal
+    range: cnc:Direction
+    value_space_en: Direction individual, unit vector, outward normal of the host face (planar hosts)
+    definition_en: Outward normal of the effective host face where the host is planar.
+  - name: hostOwner
+    range: cnc:ManufacturingFeature
+    value_space_en: feature individual
+    definition_en: The final feature node that owns the effective host face.
+derived_predicates:
+- id: pred_parallel_axis
+  label: PARALLEL_AXIS
+  definition_en: 'Query-time predicate: the feature_axis vectors of two features are parallel, abs(dot(a, b)) ~ 1.'
+  v31: new
+- id: pred_orthogonal_axis
+  label: ORTHOGONAL_AXIS
+  definition_en: 'Query-time predicate: two axis / surface-normal vectors are orthogonal, abs(dot(a, b)) ~ 0.'
+  v31: new
+- id: pred_shares_host
+  label: SHARES_HOST
+  definition_en: 'Query-time predicate: the effective host owner sets of two LOCATED_ON relations intersect.'
+  v31: new
+deleted:
+- name: MaterializationReason
+  kind: class + 7 individuals mr_* + property materializationReason
+  reason_en: A relation is materialised because of an objective geometric or topological fact, never because of a KPI mechanism (catalogue 02 §5)
+- name: rel_has_distance_to
+  kind: FeatureRelationType individual
+  reason_en: The type-open distance relation was replaced by three named relations that each share a host (catalogue 02 §6.1)
+  replaced_by: rel_hole_spacing / rel_pocket_clearance / rel_slot_clearance
+- name: rel_part_of_pattern
+  kind: FeatureRelationType individual
+  reason_en: B-Rep cannot prove pattern membership uniquely; grouping by shared host and shared class is done at query time (catalogue 02 §6.2)
+- name: distanceValue
+  kind: datatype property
+  reason_en: Retired together with rel_has_distance_to
+  replaced_by: axisSpacing / pocketClearance / slotClearance
+- name: requiresSameClass
+  kind: datatype property
+  reason_en: Its only user, rel_part_of_pattern, has retired, and no v5 relation type requires both ends to be of one class
+- name: ap_* (6 v3.1 AllowedRelationPair individuals)
+  kind: individuals
+  reason_en: Rebuilt against the v5 relation vocabulary (see types[].allowed_pairs)
+- name: Rel_* (3 example v3.1 FeatureRelation individuals)
+  kind: individuals
+  reason_en: The v5 ontology carries no example ABox (the ABox is a projection made on demand)

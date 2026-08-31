@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CNCgAIde · compare</title>
+<link rel="stylesheet" href="web/style.css">
+<script>
+  document.documentElement.dataset.theme = localStorage.getItem('tempVisualTheme') || 'light';
+</script>
+<script type="importmap">
+{ "imports": { "three": "./vendor/three.module.js" } }
+</script>
+</head>
+<body class="compare">
+
+<header class="topbar">
+  <a class="brand" href="index.html" title="Home"><svg class="brand-home" viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 8.2 8 3.2l5.5 5v5.3h-3.6V9.9H6.1v3.6H2.5z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>CNCgAIde</a>
+  <div class="cmp-pair">
+    <span class="cmp-side-tag a">A</span>
+    <select id="part-a" class="mono" title="left part (a)"></select>
+    <button class="icon-btn cmp-swap" id="swap" title="Swap a and b">⇄</button>
+    <span class="cmp-side-tag b">B</span>
+    <select id="part-b" class="mono" title="right part (b)"></select>
+  </div>
+  <select id="config-select" class="sim-select" title="cost preset"></select>
+
+  <div class="spacer"></div>
+
+  <div class="toolbar">
+    <a class="btn" id="find-similar" href="index.html?view=similarity" title="rank the corpus against part a">Find similar</a>
+    <button class="btn" data-action="fit" title="Frame the selection on both sides, or both parts (F)">Fit</button>
+    <span class="switch-group">
+      <button class="switch" role="switch" aria-checked="false" data-action="link" title="Move both cameras together (relative to each part's size)">
+        <span class="switch-label">Link cameras</span>
+        <span class="switch-track"><span class="switch-thumb"></span></span>
+      </button>
+    </span>
+    <button id="theme-toggle" class="icon-btn" title="Light / dark"></button>
+  </div>
+</header>
+
+<div class="cmp-score" id="score"></div>
+
+<main class="cmp-workspace" id="workspace">
+  <section class="pane pane-3d cmp-view">
+    <div class="viewport" id="viewport-a">
+      <div class="viewport-hud" id="hud-a"></div>
+      <div class="viewport-tip" id="tip-a"></div>
+    </div>
+  </section>
+  <section class="pane pane-3d cmp-view">
+    <div class="viewport" id="viewport-b">
+      <div class="viewport-hud" id="hud-b"></div>
+      <div class="viewport-tip" id="tip-b"></div>
+    </div>
+  </section>
+  <aside class="pane cmp-path" id="path-pane">
+    <div class="cmp-path-head" id="path-head"></div>
+    <div class="cmp-path-body" id="path"></div>
+  </aside>
+</main>
+
+<div class="loading" id="loading"><span class="spin"></span>loading…</div>
+
+<script type="module" src="web/compare.js"></script>
+</body>
+</html>
