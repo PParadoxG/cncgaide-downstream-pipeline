@@ -62,7 +62,10 @@ from dataclasses import dataclass, field
 from contract.kernel import POINT_UNAVAILABLE
 from contract.partmodel import ConcavityType, CurveType, PartModel
 
-from features._shared.closed_wall_band import EdgeIndex, face_sort_key
+from features._shared.closed_wall_band import EdgeIndex
+from topology.edges import edge_points
+from topology.faces import face_sort_key
+from topology.vectors import coerced_unit_vector, distance_sq, dot
 from features._shared.transition_evidence import TransitionEvidence
 
 CONCAVE = ConcavityType.CONCAVE.value
@@ -350,11 +353,11 @@ def _continuation_boundary(
             edge_direction = _line_direction(model, edge)
             if edge_direction is None:
                 reasons.append("line_direction_unavailable")
-            elif abs(_dot(edge_direction, direction)) < _CONTINUATION_PARALLEL_COS:
+            elif abs(dot(edge_direction, direction)) < _CONTINUATION_PARALLEL_COS:
                 reasons.append("not_parallel_to_course")
-            points = _edge_points(model, edge)
+            points = edge_points(model, edge)
             if points:
-                projections = [_dot(point, direction) for point in points]
+                projections = [dot(point, direction) for point in points]
                 extent = (min(projections), max(projections))
             else:
                 reasons.append("course_projection_unavailable")
@@ -412,7 +415,7 @@ def _line_direction(model: PartModel, edge) -> list[float] | None:
     direction = _unit(edge.parameters.get("direction"))
     if direction is not None:
         return direction
-    points = _edge_points(model, edge)
+    points = edge_points(model, edge)
     if len(points) < 2:
         return None
     best = max(
@@ -428,30 +431,6 @@ def _line_direction(model: PartModel, edge) -> list[float] | None:
     return _unit([best[2][axis] - best[1][axis] for axis in range(3)])
 
 
-def _edge_points(model: PartModel, edge) -> list[list[float]]:
-    points = [
-        list(point)
-        for point in (getattr(edge, "sample_points", None) or [])
-        if _is_vector(point)
-    ]
-    if points:
-        return points
-    return [
-        list(model.vertices[vertex_id].coordinates)
-        for vertex_id in (getattr(edge, "vertex_ids", None) or [])
-        if vertex_id in model.vertices
-    ]
-
-
-def _is_vector(value) -> bool:
-    if not isinstance(value, (list, tuple)) or len(value) != 3:
-        return False
-    try:
-        return all(math.isfinite(float(item)) for item in value)
-    except (TypeError, ValueError):
-        return False
-
-
 def _finite_float(value) -> float | None:
     try:
         result = float(value)
@@ -461,17 +440,8 @@ def _finite_float(value) -> float | None:
 
 
 def _unit(value) -> list[float] | None:
-    if not _is_vector(value):
-        return None
-    values = [float(item) for item in value]
-    norm = math.sqrt(sum(item * item for item in values))
-    if norm <= _CONTINUATION_MIN_LENGTH:
-        return None
-    return [item / norm for item in values]
-
-
-def _dot(left, right) -> float:
-    return sum(float(left[index]) * float(right[index]) for index in range(3))
+    """The module's own direction tolerance, on the shared unit vector."""
+    return coerced_unit_vector(value, _CONTINUATION_MIN_LENGTH)
 
 
 def _crossing_concavity(
@@ -482,8 +452,12 @@ def _crossing_concavity(
     rim_sigs: set,
 ) -> tuple[str, dict[str, float]]:
     """Length-weighted material-side concavity of one rim crossing."""
+    # Both loops below feed a floating-point accumulation, so they walk a sorted
+    # key rather than the set itself: a set's iteration order follows the process
+    # hash seed, and the sum of the same lengths in a different order is not the
+    # same float. The dominance comparison downstream reads that float.
     weights: dict[str, float] = {}
-    for face_id in from_faces:
+    for face_id in sorted(from_faces):
         face = model.faces.get(face_id)
         if face is None:
             continue
@@ -498,10 +472,11 @@ def _crossing_concavity(
             key = _concavity_value(adjacency.connection_type)
             weights[key] = weights.get(key, 0.0) + max(length, 0.0)
 
-    total = sum(weights.values())
+    ordered = sorted(weights.items())
+    total = sum(value for _, value in ordered)
     if total <= 0.0:
         return UNKNOWN, {}
-    shares = {key: value / total for key, value in weights.items()}
+    shares = {key: value / total for key, value in ordered}
     best = max(shares.items(), key=lambda item: (item[1], item[0]))
     if best[0] == UNKNOWN or best[1] < _CROSSING_DOMINANCE:
         return MIXED, shares
@@ -550,8 +525,8 @@ def _chord_test(
     tolerance = _chord_tolerance(model)
     verdicts: list[str] = []
     for point_a in _spread(entry_points, _CHORD_SAMPLES):
-        point_b = min(exit_points, key=lambda candidate: _distance_sq(point_a, candidate))
-        length = math.sqrt(_distance_sq(point_a, point_b))
+        point_b = min(exit_points, key=lambda candidate: distance_sq(point_a, candidate))
+        length = math.sqrt(distance_sq(point_a, point_b))
         if length <= _CHORD_MIN_LENGTH:
             continue
         midpoint = [(point_a[axis] + point_b[axis]) * 0.5 for axis in range(3)]
@@ -594,10 +569,6 @@ def _spread(points: list[list[float]], count: int) -> list[list[float]]:
         return points
     stride = len(points) / float(count)
     return [points[int(idx * stride)] for idx in range(count)]
-
-
-def _distance_sq(left: list[float], right: list[float]) -> float:
-    return sum((float(left[axis]) - float(right[axis])) ** 2 for axis in range(3))
 
 
 def _chord_tolerance(model: PartModel) -> float:

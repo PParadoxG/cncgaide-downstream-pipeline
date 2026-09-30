@@ -353,7 +353,7 @@ def face_set_openings(model, own_face_ids) -> list[FaceSetOpening]:
 
     Knows no leaf class and no ontology: it takes a model and a set of face
     ids and answers where that set stops.  The cylindrical-wall rim walk in
-    ``features._shared.hole_topology`` answers the same question for the one
+    ``topology.hole_topology`` answers the same question for the one
     shape it is specialised to; this answers it for a patch of any shape,
     which is what a pocket, a slot or a boss needs.
     """

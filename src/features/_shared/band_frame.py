@@ -87,7 +87,9 @@ from dataclasses import dataclass, field
 
 from contract.partmodel import PartModel, SurfaceType
 
-from features._shared.closed_wall_band import EdgeIndex, face_sort_key
+from features._shared.closed_wall_band import EdgeIndex
+from topology.faces import face_sort_key
+from topology.vectors import coerced_unit_vector, cross, dot
 
 # Opening-rim planarity budget, relative to the rim's own extent.
 _PLANARITY_RATIO = 1.0e-4
@@ -268,7 +270,7 @@ def _wall_draft(model: PartModel, face_id: str, axis: list[float]) -> WallDraft:
     normals = outward_normals(model, face_id)
     if not normals:
         return WallDraft(face_id, surface_type, None, None, 0)
-    angles = [math.degrees(math.asin(max(-1.0, min(1.0, -_dot(n, axis))))) for n in normals]
+    angles = [math.degrees(math.asin(max(-1.0, min(1.0, -dot(n, axis))))) for n in normals]
     return WallDraft(
         face_id=face_id,
         surface_type=surface_type,
@@ -293,7 +295,7 @@ def outward_normals(model: PartModel, face_id: str) -> list[list[float]]:
     if face is None:
         return []
     if face.surface_type == SurfaceType.PLANE:
-        unit = _unit(face.parameters.get("normal"))
+        unit = coerced_unit_vector(face.parameters.get("normal"))
         if unit is not None:
             return [[-v for v in unit] if face.is_reversed else unit]
     return [normal for _, normal in surface_samples(model, face_id)]
@@ -332,19 +334,19 @@ def material_is_outside(model: PartModel, face_id: str) -> bool | None:
     face = model.faces.get(face_id)
     if face is None:
         return None
-    axis = _unit(face.parameters.get("axis_direction"))
+    axis = coerced_unit_vector(face.parameters.get("axis_direction"))
     origin = face.parameters.get("axis_location") or face.parameters.get("apex")
     if axis is None or not isinstance(origin, (list, tuple)):
         return None
     votes: list[bool] = []
     for point, normal in surface_samples(model, face_id):
         rel = [float(point[i]) - float(origin[i]) for i in range(3)]
-        along = _dot(rel, axis)
+        along = dot(rel, axis)
         radial = [rel[i] - along * axis[i] for i in range(3)]
-        unit_radial = _unit(radial)
+        unit_radial = coerced_unit_vector(radial)
         if unit_radial is None:
             continue
-        votes.append(_dot(unit_radial, normal) < 0.0)
+        votes.append(dot(unit_radial, normal) < 0.0)
     if not votes:
         return None
     if all(votes):
@@ -401,7 +403,7 @@ def _fit_plane(points: list[list[float]]):
     # well-defined plane; refuse rather than pick an arbitrary one.
     if eigenvalues[1] <= max(1.0e-12, eigenvalues[2] * 1.0e-9):
         return centroid.tolist(), None, 0.0, extent
-    normal = _unit(eigenvectors[:, 0].tolist())
+    normal = coerced_unit_vector(eigenvectors[:, 0].tolist())
     if normal is None:
         return centroid.tolist(), None, 0.0, extent
     residual = float(np.abs(relative @ np.asarray(normal)).max())
@@ -410,8 +412,8 @@ def _fit_plane(points: list[list[float]]):
 
 def _orthonormal_basis(axis: list[float]):
     seed = [1.0, 0.0, 0.0] if abs(axis[0]) < 0.9 else [0.0, 1.0, 0.0]
-    u = _unit(_cross(seed, axis))
-    v = _unit(_cross(axis, u))
+    u = coerced_unit_vector(cross(seed, axis))
+    v = coerced_unit_vector(cross(axis, u))
     return u, v
 
 
@@ -732,10 +734,10 @@ def _polygon_centroid(planar: list[tuple[float, float]]) -> tuple[float, float] 
     for position in range(len(planar)):
         u0, v0 = planar[position]
         u1, v1 = planar[(position + 1) % len(planar)]
-        cross = u0 * v1 - u1 * v0
-        twice_area += cross
-        accumulated_u += (u0 + u1) * cross
-        accumulated_v += (v0 + v1) * cross
+        term = u0 * v1 - u1 * v0
+        twice_area += term
+        accumulated_u += (u0 + u1) * term
+        accumulated_v += (v0 + v1) * term
     if abs(twice_area) <= 1.0e-12:
         return None
     return (accumulated_u / (3.0 * twice_area), accumulated_v / (3.0 * twice_area))
@@ -889,7 +891,7 @@ def cylindrical_wall_radius(model: PartModel, frame: BandFrame, face_ids) -> tup
         if face is None or face.surface_type != SurfaceType.CYLINDER:
             diagnostics["reason"] = f"wall face {face_id} is {surface}, not a cylinder"
             return None, diagnostics
-        axis = _unit(face.parameters.get("axis_direction"))
+        axis = coerced_unit_vector(face.parameters.get("axis_direction"))
         location = face.parameters.get("axis_location")
         radius = face.parameters.get("radius")
         if axis is None or not isinstance(location, (list, tuple)) or not isinstance(radius, (int, float)) or float(radius) <= 0.0:
@@ -927,7 +929,7 @@ def lateral_offset(frame: BandFrame, left, right) -> float | None:
 
 def _lateral_offset(origin: list[float], point: list[float], axis: list[float]) -> float:
     delta = [point[i] - origin[i] for i in range(3)]
-    along = _dot(delta, axis)
+    along = dot(delta, axis)
     return math.sqrt(sum((delta[i] - along * axis[i]) ** 2 for i in range(3)))
 
 
@@ -1047,35 +1049,8 @@ def _distance2(a, b) -> float:
 # Small vector helpers
 # ---------------------------------------------------------------------------
 
-def _dot(a, b) -> float:
-    return sum(float(a[i]) * float(b[i]) for i in range(3))
-
-
-def _cross(a, b):
-    return [
-        a[1] * b[2] - a[2] * b[1],
-        a[2] * b[0] - a[0] * b[2],
-        a[0] * b[1] - a[1] * b[0],
-    ]
-
-
-def _unit(value):
-    if not isinstance(value, (list, tuple)) or len(value) != 3:
-        return None
-    try:
-        components = [float(v) for v in value]
-    except (TypeError, ValueError):
-        return None
-    if not all(math.isfinite(v) for v in components):
-        return None
-    norm = math.sqrt(sum(v * v for v in components))
-    if norm <= 1.0e-12:
-        return None
-    return [v / norm for v in components]
-
-
 def parallel(a, b, tolerance_deg: float = _ANGLE_TOL_DEG) -> bool:
-    ua, ub = _unit(a), _unit(b)
+    ua, ub = coerced_unit_vector(a), coerced_unit_vector(b)
     if ua is None or ub is None:
         return False
-    return abs(_dot(ua, ub)) >= math.cos(math.radians(tolerance_deg))
+    return abs(dot(ua, ub)) >= math.cos(math.radians(tolerance_deg))

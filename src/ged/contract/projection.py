@@ -16,7 +16,9 @@ decision in ``NODE_REPORT/GED_Design_Outline_v0.md`` §2:
   order; the metric relations keep their normalised value (§2.5);
 - unclaimed faces are aggregated into one low-weight fixed node (§2.6);
 - ``L_ref`` (geometric diameter of the vertex cloud) is derived here and is
-  not an ontology attribute (§2.3 / R-5).
+  not an ontology attribute (§2.3 / R-5);
+- the finished graph is in **canonical order** (``canonical_node_key``), so a
+  renumbering of the artifacts cannot move a distance (node 28 D-1).
 
 Nothing here assigns a cost.  The audit collects every place where the
 artifacts deviate from the contract so that a representation problem is
@@ -32,6 +34,8 @@ from pathlib import Path
 from typing import Any, Iterable
 
 import numpy as np
+
+from contract.face_ids import raw_cad_face_id
 
 from .representation import Representation, V5_1, for_line
 from .schema import GedAttribute, GedEdge, GedFixedNode, GedGraph, GedNode
@@ -288,8 +292,22 @@ def _located_on_endpoints(
     raw_edge: dict[str, Any],
     semantic_ids: set[str],
     surface_ids: set[str],
-) -> tuple[str | None, list[str]]:
-    """Return (source feature id, host owner ids) from the evidence contract."""
+) -> tuple[str | None, list[str], str]:
+    """Return (source feature id, host owner ids, direction) from the evidence.
+
+    ``direction`` is ``"u_on_v"`` when the evidence says which end is located
+    on which, and ``"unstated"`` when it does not.  The third case - the two
+    ends witnessing each other - used to have no answer at all and cost the
+    edge (finding F-09): nx's relation layer records a CORNER_NOTCH_STRAIGHT
+    and the STEP1HOLE through it as meeting at these terminals, without
+    saying which is on which, so neither the one-witness path nor the
+    one-semantic-end fall-back applied and the edge was dropped.  Twelve of
+    nx's 73 projected LOCATED_ON edges, on the heaviest relation channel that
+    line has.  Leaving the direction blank is not an approximation: no cost
+    function reads it - the graph's edge key is the sorted pair plus the type
+    - so what was thrown away was a real relation for the sake of a field
+    nobody uses.
+    """
     evidence = raw_edge.get("evidence") or {}
     properties = raw_edge.get("properties") or {}
     sources: list[str] = []
@@ -310,17 +328,26 @@ def _located_on_endpoints(
                     hosts.append(host)
     endpoints = [str(raw_edge.get("source", "")), str(raw_edge.get("target", ""))]
     if len(sources) == 1:
-        source = sources[0]
-    else:
-        # Fallback: the non-Surface endpoint is the source.
-        candidates = [e for e in endpoints if e in semantic_ids]
-        others = [e for e in endpoints if e in surface_ids]
-        source = candidates[0] if len(candidates) == 1 and len(others) == 1 else None
-    if source is None:
-        return None, []
-    if not hosts:
-        hosts = [e for e in endpoints if e != source]
-    return source, hosts
+        return _with_hosts(sources[0], hosts, endpoints, "u_on_v")
+    # Fallback: the non-Surface endpoint is the source.
+    candidates = [e for e in endpoints if e in semantic_ids]
+    others = [e for e in endpoints if e in surface_ids]
+    if len(candidates) == 1 and len(others) == 1:
+        return _with_hosts(candidates[0], hosts, endpoints, "u_on_v")
+    # Mutual witness: exactly two witnesses, and they are exactly this edge's
+    # two ends, both of them semantic.  The relation holds; its direction is
+    # not stated, and is not invented here.
+    if (len(sources) == 2 and endpoints[0] != endpoints[1]
+            and set(sources) == set(endpoints)
+            and all(end in semantic_ids for end in endpoints)):
+        first, second = sorted(endpoints)
+        return first, [second], "unstated"
+    return None, [], "u_on_v"
+
+
+def _with_hosts(source: str, hosts: list[str], endpoints: list[str],
+                direction: str) -> tuple[str, list[str], str]:
+    return source, hosts or [e for e in endpoints if e != source], direction
 
 
 def _component_sizes(pairs: list[tuple[str, str]]) -> dict[str, int]:
@@ -343,6 +370,55 @@ def _component_sizes(pairs: list[tuple[str, str]]) -> dict[str, int]:
         root = find(node)
         sizes[root] = sizes.get(root, 0) + 1
     return {node: sizes[find(node)] for node in parent}
+
+
+# --------------------------------------------------------------------------
+# canonical order
+
+
+def _face_order(face_id: object) -> tuple[float, str]:
+    """One active face id, ordered by its CAD face number.
+
+    Same rule as ``topology.faces.face_sort_key`` and for the same reason -
+    ``face_9`` before ``face_10`` - but spelled here because the projection
+    reads artifacts, not a PartModel, and may not import a kernel line's
+    topology helpers.  Both read the number through ``contract.face_ids``, so
+    there is one parsing rule, not two.
+    """
+    number = raw_cad_face_id(face_id)
+    return (float(number) if number is not None else math.inf, str(face_id))
+
+
+def canonical_node_key(node: GedNode) -> tuple[str, tuple[tuple[float, str], ...], str]:
+    """The order a graph's nodes enter the solver in.
+
+    ``(class, active face ids in numeric order, node id)``.  The first two
+    components are what the *part* is - a node is the class it recognised over
+    the faces it claimed - and they do not move when the recognisers walk the
+    model in a different order and hand out different ordinals.  The node id
+    is only the tie-break, for the case two nodes of one class claim the very
+    same face set; ``tools/conclusion_diff.py`` calls that case ambiguous and
+    refuses to re-pair it, and here it simply means the ordinal decides.
+
+    Why this exists (node 27 phase 2 §6): the BP solver is an approximation,
+    and among equal-cost assignments Hungarian picks the one the enumeration
+    order leads to.  Renumbering five parts moved 22 of 72 pairwise distances
+    by up to 6.3e-3 while every node, edge and attribute stayed identical.
+    Ordering the projection canonically makes the distance a function of the
+    graph rather than of the ordinals the pipeline happened to issue.
+    """
+    return (node.type_key, tuple(sorted(_face_order(f) for f in node.face_ids)), node.id)
+
+
+def _canonical_edge_key(edge: GedEdge, rank: dict[str, int]) -> tuple[int, int, str]:
+    """An edge follows its two ends: the pair of canonical node positions.
+
+    Unordered, because the cost layer's edge key is the sorted pair plus the
+    type; ``u`` and ``v`` themselves are left alone, since LOCATED_ON's ``u``
+    is the semantic source and swapping it would rewrite what the edge says.
+    """
+    left, right = rank[edge.u], rank[edge.v]
+    return (min(left, right), max(left, right), edge.type_key)
 
 
 # --------------------------------------------------------------------------
@@ -458,7 +534,7 @@ def project_part(
                 audit.note_drop("DIRECT_ADJACENT:surface_endpoint")
             continue
         if edge_type == "LOCATED_ON":
-            src, hosts = _located_on_endpoints(raw_edge, semantic_ids, surface_ids)
+            src, hosts, direction = _located_on_endpoints(raw_edge, semantic_ids, surface_ids)
             if src is None or src not in semantic_ids:
                 audit.located_on_unresolved.append({"edgeId": raw_edge.get("edgeId"), "source": source, "target": target})
                 audit.note_drop("LOCATED_ON:unresolved")
@@ -473,14 +549,10 @@ def project_part(
                     if key in slots:
                         continue
                     roles = [t.get("terminalRole") for t in properties.get("terminals", []) if isinstance(t, dict)]
-                    add_edge(
-                        GedEdge(
-                            src,
-                            host,
-                            "LOCATED_ON",
-                            metadata={"direction": "u_on_v", "terminalRoles": roles},
-                        )
-                    )
+                    metadata = {"direction": direction, "terminalRoles": roles}
+                    if direction == "unstated":
+                        metadata["reason"] = "mutual_witness"
+                    add_edge(GedEdge(src, host, "LOCATED_ON", metadata=metadata))
                 else:
                     audit.located_on_unresolved.append({"edgeId": raw_edge.get("edgeId"), "host": host})
                     audit.note_drop("LOCATED_ON:host_unknown")
@@ -535,6 +607,12 @@ def project_part(
         else:
             finished.append(edge)
 
+    # Canonical order, last: everything above may append in artifact order,
+    # and nothing above reads a position.  The nodes decide, the edges follow.
+    nodes.sort(key=canonical_node_key)
+    rank = {node.id: index for index, node in enumerate(nodes)}
+    finished.sort(key=lambda edge: _canonical_edge_key(edge, rank))
+
     histogram: dict[str, int] = {}
     for node in nodes:
         histogram[node.type_key] = histogram.get(node.type_key, 0) + 1
@@ -578,13 +656,17 @@ def load_part(line_dir: str | Path, *, graph_id: str | None = None,
     name rather than to "occ".  The representation likewise defaults to the
     one that line's artifacts are written in, so a caller who names the folder
     never has to name the ontology as well.
+
+    A folder whose name is not a registered line raises: the two ontologies do
+    not translate into one another, and reading nx artifacts with v5.1's leaf
+    whitelist produces a graph in which every class is unknown and every
+    relation is filtered out - a distance, computed without complaint, from
+    almost nothing (node 26 F-13).  A caller who really means a particular
+    ontology says so by passing ``representation``.
     """
     root = Path(line_dir)
     if representation is None:
-        try:
-            representation = for_line(root.name)
-        except KeyError:
-            representation = V5_1
+        representation = for_line(root.name)
     result = json.loads((root / "result.json").read_text(encoding="utf-8"))
     partmodel = json.loads((root / "partmodel.json").read_text(encoding="utf-8"))
     return project_part(result, partmodel, graph_id=graph_id or root.parent.name,

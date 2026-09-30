@@ -7,9 +7,10 @@ rule module repeats it:
    only, never one record per instance: this is the largest bucket by far and
    listing it would bury the informative verdicts);
 2. in domain, but the attribute the condition reads is not in that leaf
-   class's attribute set (key absent)              -> NOT_APPLICABLE, structural;
-3. in domain and in the attribute set, but the value is null (B-class gap)
-   -> NOT_EVALUABLE, carrying the geometric reason from ``missingAttributes``;
+   class's attribute set                           -> NOT_APPLICABLE, structural;
+3. in domain and in the attribute set, but the instance carries no value -
+   the key is absent, or it is null (B-class gap)  -> NOT_EVALUABLE, carrying
+   the geometric reason from ``missingAttributes`` when there is one;
 4. otherwise the rule decides, and a conditional heuristic whose premise is
    false returns NOT_APPLICABLE - vacuous truth is never PASS.
 
@@ -20,6 +21,7 @@ per-heuristic or per-attribute branch.
 
 from __future__ import annotations
 
+import sys
 import traceback
 from collections import Counter
 
@@ -85,7 +87,8 @@ def run_heuristics(
         thresholds = registry.threshold_records(rule.USES_THRESHOLDS)
         domain_nodes = [node for node in context.nodes
                         if registry.in_domain(rule.h_id, node.featureType)]
-        entry = _new_summary(rule, definition, len(domain_nodes), len(context.nodes) - len(domain_nodes))
+        unit, in_domain, out_of_domain = _domain_units(rule, context, registry, domain_nodes)
+        entry = _new_summary(rule, definition, unit, in_domain, out_of_domain)
 
         try:
             if isinstance(rule, FeatureRule):
@@ -104,6 +107,7 @@ def run_heuristics(
             })
             entry["error"] = f"{type(exc).__name__}: {exc}"
             summary[rule.h_id] = entry
+            _announce_broken_rule(rule.h_id, exc)
             continue
 
         for verdict in verdicts:
@@ -159,12 +163,69 @@ def not_evaluated(reason: str, *, node_count: int = 0) -> tuple[dict, dict]:
 
 # --------------------------------------------------------------- internals
 
-def _new_summary(rule, definition: dict, domain_nodes: int, out_of_domain: int) -> dict:
+def _announce_broken_rule(h_id: str, exc: BaseException) -> None:
+    """Say out loud that one rule was caught, because the record cannot.
+
+    Catching is right - a rule that raises must not cost the part its other
+    fifty verdicts.  But what the catch leaves behind (``payload["errors"]``
+    and ``summary[h]["error"]``) had no reader, and on the page the result is
+    indistinguishable from "this part carries no instance of that class": the
+    heuristic simply has no unit.  One line on the same captured stream the
+    store's own PASS/FAIL lines go to is the reader that was missing; the
+    record keeps its copy for afterwards.
+
+    ASCII-folded on the way out: this runs inside a refresh whose console may
+    be cp936, and a message that cannot be encoded must not turn a caught rule
+    error into a lost part.
+    """
+    message = f"HRULE {h_id} raised and was caught: {type(exc).__name__}: {exc}"
+    print(message.encode("ascii", "backslashreplace").decode("ascii"), file=sys.stderr)
+
+
+def _domain_units(rule, context: HeuristicContext, registry, domain_nodes: list):
+    """How many units this rule's domain admits, in the unit the rule uses.
+
+    Finding D-11: the executor used to publish the in-domain *node* count for
+    every rule, including the ones whose unit is not a node.  A pair rule is
+    evaluated once per edge of one relation type, and a part rule exactly once
+    per part, so a node count there answered a question nobody asked - and the
+    edges the domain excluded were not counted anywhere at all.
+
+    Returns ``(unit, in_domain, out_of_domain)``.  ``unit`` names what the two
+    numbers count, so the pair of them can be read without knowing this
+    function.  Terminal / group / chain rules make their own units out of the
+    features the domain admits, and that node count is what is reported for
+    them - which is why the unit says ``feature`` and the rule's own unit
+    stays in ``scope``.
+    """
+    if isinstance(rule, PairRule):
+        inside = outside = 0
+        for edge in context.edges_of(rule.edge_type):
+            source = context.node_by_id.get(edge.source)
+            target = context.node_by_id.get(edge.target)
+            if source is None or target is None:
+                # Not a unit either way: the executor cannot say whether an
+                # edge whose endpoint is not a feature node is in domain.
+                continue
+            if (registry.in_domain(rule.h_id, source.featureType)
+                    and registry.in_domain(rule.h_id, target.featureType)):
+                inside += 1
+            else:
+                outside += 1
+        return "featurePair", inside, outside
+    if isinstance(rule, PartRule):
+        return "part", 1, 0
+    return "feature", len(domain_nodes), len(context.nodes) - len(domain_nodes)
+
+
+def _new_summary(rule, definition: dict, domain_unit: str,
+                 domain_nodes: int, out_of_domain: int) -> dict:
     return {
         "hId": rule.h_id,
         "scope": rule.scope,
         "grade": definition.get("grade"),
         "externalDependency": definition.get("external_dependency_en"),
+        "domainUnit": domain_unit,
         "domainNodes": domain_nodes,
         "outOfDomainNodes": out_of_domain,
         "records": 0,
@@ -360,6 +421,7 @@ def corpus_summary(part_summaries: list[dict]) -> dict:
                 "scope": entry.get("scope"),
                 "grade": entry.get("grade"),
                 "externalDependency": entry.get("externalDependency"),
+                "domainUnit": entry.get("domainUnit"),
                 "domainNodes": 0,
                 "records": 0,
                 "counts": {outcome: 0 for outcome in OUTCOMES},

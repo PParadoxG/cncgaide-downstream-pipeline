@@ -16,6 +16,7 @@
 // state for this page.
 
 import { DOTS, createMenu } from './menu.js';
+import { escapeHtml } from './html.js';
 
 const GROUPS_KEY = 'gatherSeedSimilarityGroups';    // { name: [partId, …] }
 const PRESETS_KEY = 'gatherSeedSimilarityPresets';  // { name: { W_…: value } }
@@ -43,16 +44,52 @@ export function createSimilarity(root, options = {}) {
     result: null,            // last rank payload
     busy: false,
     error: null,
+    errorKind: null,         // 'specs' | 'resolve' | 'rank' - who may clear it
     note: null,
     pendingRun: false,
     built: false,
     openRow: null,           // ranking row whose breakdown is expanded
+    // Request generation.  Bumped by anything that makes an answer already in
+    // flight the wrong answer - a new Query, or a line switch - and checked
+    // again where the answer lands.  Without it a rank computed on one line's
+    // scale could arrive after the switch and be shown under the other line's
+    // name, which is exactly the comparison node 21' says cannot be made.
+    token: 0,
   };
   Object.assign(st, sanitizeState(readJson(STATE_KEY, {})));
 
   const el = {};
   let resolveTimer = null;
   let noteTimer = null;
+
+  // ------------------------------------------------------------- failures
+  //
+  // One message slot, three things that can fail, and the rule for who may
+  // clear it (node 27G 6 #4, which asked for the rule rather than a fix):
+  //
+  //   'specs'    the configs fetch that gives this panel its presets and
+  //              sliders.  Cleared by the next configs fetch that succeeds -
+  //              and by nothing else: pressing Query while the API is down
+  //              must not wipe the sentence explaining why the sliders are
+  //              missing.
+  //   'resolve'  the hash preview for the weights being moved.  Cleared by
+  //              the next preview that resolves.
+  //   'rank'     the ranking itself.  Cleared when the next ranking starts,
+  //              which is where the panel already cleared it.
+  //
+  // A success clears only its own kind.  What went wrong stays on screen
+  // until the thing that went wrong works.
+  function fail(kind, message) {
+    st.error = message;
+    st.errorKind = kind;
+  }
+
+  function succeeded(kind) {
+    if (st.errorKind === kind) {
+      st.error = null;
+      st.errorKind = null;
+    }
+  }
 
   // ------------------------------------------------------------ public api
 
@@ -112,8 +149,9 @@ export function createSimilarity(root, options = {}) {
                                    { cache: 'no-store' });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       st.specs = await response.json();
+      succeeded('specs');
     } catch (error) {
-      st.error = `similarity API unavailable: ${error.message}`;
+      fail('specs', `similarity API unavailable: ${error.message}`);
       st.specs = null;
       return;
     }
@@ -189,6 +227,7 @@ export function createSimilarity(root, options = {}) {
   async function resolveNow() {
     const base = basePreset();
     if (!base) return;
+    const token = st.token;
     const params = new URLSearchParams({ config: base.name });
     const diff = weightsParam();
     if (diff) params.set('weights', diff);
@@ -196,10 +235,16 @@ export function createSimilarity(root, options = {}) {
       const response = await fetch(`api/similarity/configs?${withLine(params)}`, { cache: 'no-store' });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || `HTTP ${response.status}`);
+      // The debounce fires this from a timer, so the line may have changed
+      // while the answer was on its way; a hash from the other line's cost
+      // table beside this line's ranking is the worst kind of wrong.
+      if (token !== st.token) return;
       st.resolved = payload.resolved || base;
+      succeeded('resolve');
     } catch (error) {
+      if (token !== st.token) return;
       st.resolved = null;
-      st.error = error.message;
+      fail('resolve', error.message);
     }
     if (st.built) renderHashChips();
   }
@@ -745,7 +790,7 @@ export function createSimilarity(root, options = {}) {
     const costKeys = Object.keys(rows[0].breakdown || {}).filter((key) => /_cost$/.test(key));
     costKeys.forEach((key, position) => {
       const tag = span(`tag c${position % 6}`);
-      tag.innerHTML = `<i></i>${channelLabel(key)}`;
+      tag.innerHTML = `<i></i>${escapeHtml(channelLabel(key))}`;
       tag.title = key;
       el.legend.append(tag);
     });
@@ -920,25 +965,35 @@ total ${total.toFixed(4)}`;
     if (st.top) params.set('top', String(st.top));
     if (st.prefilter) params.set('prefilter', String(st.prefilter));
 
+    const token = ++st.token;
     st.busy = true;
-    st.error = null;
+    // Only the previous ranking's failure: a slider hash that would not
+    // resolve, or an API that is not answering, is still true right now.
+    succeeded('rank');
     el.run.disabled = true;
     el.run.textContent = 'Querying…';
     renderResults();
+    let superseded = false;
     try {
       if (candidates !== null && candidates.length === 0) throw new Error('no candidate chosen — add parts with + or switch to "all other parts"');
       const response = await fetch(`api/similarity/rank?${withLine(params)}`, { cache: 'no-store' });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || `HTTP ${response.status}`);
+      superseded = token !== st.token;
+      if (superseded) return;
       st.result = payload;
       if (payload.config) st.resolved = payload.config;
     } catch (error) {
-      st.error = error.message;
+      superseded = token !== st.token;
+      if (superseded) return;
+      fail('rank', error.message);
       st.result = null;
     } finally {
       st.busy = false;
       el.run.disabled = false;
       el.run.textContent = 'Query';
+      // Whoever bumped the token owns the screen now; this call draws nothing.
+      if (superseded) renderResults();
     }
     renderHashChips();
     renderResults();
@@ -1016,11 +1071,18 @@ total ${total.toFixed(4)}`;
       scale, so it is dropped rather than relabelled, and the presets are
       re-read because the server answers per line. */
   async function setLine() {
+    // Anything in flight was computed on the scale being left behind.
+    const token = ++st.token;
     st.result = null;
+    // Every kind, not just one: each of the three failures was about the
+    // scale being left behind, and the new line answers all three afresh.
     st.error = null;
+    st.errorKind = null;
     st.note = null;
     await loadSpecs();
+    if (token !== st.token) return;
     await resolveNow();
+    if (token !== st.token) return;
     if (st.built) render();
   }
 

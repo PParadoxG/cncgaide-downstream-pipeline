@@ -37,6 +37,7 @@ from core.paths import (
     part_dir,
     part_paths,
     project_relative,
+    project_relative_gap,
     resolve_input_path,
     run_paths,
 )
@@ -62,6 +63,21 @@ STAGING_DIR = ".staging"
 JOB_ID_ENV = "GATHERSEED_JOB_ID"
 
 MODES = ("stale", "all")
+
+# ``heuristics.json`` has two writers - the whole-part rebuild in
+# ``core.orchestrator`` / the nx journal, and the seconds-tier recompute below
+# - and one snapshot must not be able to tell which of them wrote it.  Both
+# now lay the file out the same way the other store artifacts are laid out:
+# no indent, no space after a separator.  The digest cannot see the
+# difference either way (``store.stamps._content_hash`` parses the JSON before
+# hashing it), so this buys size and one convention, not a new answer.
+_COMPACT_JSON = (",", ":")
+
+# How stale a layer table ``store_status`` may report.  Read-only display
+# only: ``plan`` always recomputes.  The page polls every two seconds, so a
+# window that size turns one walk per poll into one walk per poll pair without
+# any chip lagging by more than one refresh.
+STATUS_STAMP_MAX_AGE = 2.0
 
 
 # -------------------------------------------------------------------- plan
@@ -99,6 +115,10 @@ class Plan:
     untracked: list[str] = field(default_factory=list)
     buildViewer: bool = True
     lines: tuple[str, ...] = LINE_ORDER
+    # Why ``--device auto`` could not be resolved into a concrete device, when
+    # it could not be.  One run-level line, not one per part: an unresolved
+    # ``auto`` is a property of the machine, not of any single STEP.
+    deviceNote: str | None = None
 
     def counts(self) -> dict:
         counts: dict = {light: 0 for light in stamping.LIGHTS}
@@ -133,6 +153,8 @@ class Plan:
                 out.append(f"      {line:3s} {entry.action:16s} {detail}")
         for name in self.untracked:
             out.append(f"  {'untracked':15s} {name}  - part directory without record or source")
+        if self.deviceNote:
+            out.append(f"  note: {self.deviceNote}")
         out.append("  " + plan_summary(self.counts()))
         return "\n".join(out)
 
@@ -182,6 +204,39 @@ def run_summary(counts: dict) -> str:
     return "; ".join(out)
 
 
+# What a built line always leaves on disk, and - when the viewer artifacts
+# were built too - what it leaves as well.  Named as ``part_paths`` keys, so a
+# line that gains or loses a file changes one list and not this check.  Only
+# the files *both* lines write are here: the open-source line's vendor output
+# (``aagnet_*``) is its own, and a required-file list that named it would call
+# every healthy NX line broken.
+REQUIRED_LINE_ARTIFACTS = ("result", "partmodel", "heuristics")
+REQUIRED_VIEWER_ARTIFACTS = ("graph_view", "id_map", "mesh_bin", "mesh_index", "viewer_view")
+
+
+def missing_line_artifacts(
+    project_root: str | Path,
+    output_tag: str,
+    part_id: str,
+    line: str,
+    *,
+    want_viewer: bool = True,
+    viewer_built: bool = True,
+) -> list[str]:
+    """File names a line that says PASS owes this run but has not got on disk.
+
+    A record may not outlive the files it describes.  ``rebuild_index`` folds
+    records, not directories, so a line whose folder was deleted, quarantined
+    or half-published would otherwise be advertised by the manifest and the
+    viewer index for as long as nothing else moved.
+    """
+    paths = part_paths(project_root, output_tag, part_id, line)
+    wanted = list(REQUIRED_LINE_ARTIFACTS)
+    if want_viewer and viewer_built:
+        wanted += list(REQUIRED_VIEWER_ARTIFACTS)
+    return [paths[key].name for key in wanted if not paths[key].is_file()]
+
+
 def plan(
     project_root: str | Path,
     input_path: str | Path,
@@ -192,6 +247,7 @@ def plan(
     limit: int = 0,
     build_viewer: bool = True,
     lines: tuple[str, ...] = LINE_ORDER,
+    device: str | None = None,
 ) -> Plan:
     if mode not in MODES:
         raise ValueError(f"mode must be one of {MODES}, got {mode!r}")
@@ -207,6 +263,11 @@ def plan(
     steps = {make_part_id(path, input_root): path for path in step_files}
     records = records_by_id(root, output_tag)
     stamps = stamping.layer_stamps(root)
+    # ``auto`` is resolved once for the whole plan: where it lands is a fact
+    # about this machine, not about any one part, and the resolver reads the
+    # environment instead of importing torch precisely so that ``plan`` does
+    # not have to load the inference stack to decide what to do.
+    device, device_note = stamping.resolve_inference_device(device)
     run = run_paths(root, output_tag)
 
     ids = sorted(set(steps) | set(records) if limit <= 0 else steps, key=str.lower)
@@ -226,17 +287,24 @@ def plan(
         for line in lines:
             entry = stamping.plan_line(
                 record, line, step_path, stamps,
-                want_viewer=build_viewer, force=(mode == "all"),
+                want_viewer=build_viewer, force=(mode == "all"), device=device,
             )
-            # The cheap path needs the artifacts it recomputes from; without
-            # them it is a full build, and the plan says so rather than
-            # discovering it half way through the sync.
-            if entry.action == stamping.HEURISTICS_ONLY:
-                paths = part_paths(root, output_tag, part_id, line)
-                if not (paths["partmodel"].is_file() and paths["result"].is_file()):
+            # Neither doing nothing nor the cheap path is honest when the
+            # files the record describes are not there: the cheap path needs
+            # them to recompute from, and a skip would leave the manifest
+            # advertising artifacts nobody can read.  Checked here rather than
+            # discovered half way through the sync.
+            if step_path is not None and entry.action in (stamping.SKIP, stamping.HEURISTICS_ONLY):
+                block = ((record or {}).get("lines") or {}).get(line)
+                missing = missing_line_artifacts(
+                    root, output_tag, part_id, line,
+                    want_viewer=build_viewer,
+                    viewer_built=bool(isinstance(block, dict) and block.get("viewerEntry")),
+                ) if isinstance(block, dict) and block.get("status") == "PASS" else []
+                if missing:
                     entry = stamping.LineAction(
                         line, stamping.BUILD,
-                        entry.reasons + ["stored partmodel.json/result.json missing"],
+                        entry.reasons + ["stored artifacts missing: " + ", ".join(missing)],
                         entry.staleLayers)
             actions[line] = entry
         items.append(PlanItem(
@@ -262,6 +330,7 @@ def plan(
         untracked=untracked,
         buildViewer=build_viewer,
         lines=tuple(lines),
+        deviceNote=device_note,
     )
 
 
@@ -282,6 +351,7 @@ def execute(
     build_viewer: bool | None = None,
     keep_missing: bool = False,
     job_id: str | None = None,
+    aagnet: bool = True,
 ) -> dict:
     """Carry out *plan_*; rebuild the indexes; return a summary.
 
@@ -324,7 +394,8 @@ def execute(
             if todo:
                 print(f"{line}: no builder registered; {len(todo)} part(s) left alone")
             continue
-        outcome = builder(root, tag, plan_, todo, device, build_viewer, job_id)
+        outcome = builder(root, tag, plan_, todo, device, build_viewer, job_id,
+                          aagnet=aagnet)
         for key, value in outcome.items():
             counts["lines"][line][key] = counts["lines"][line].get(key, 0) + value
         for item in todo:
@@ -378,15 +449,28 @@ def execute(
 # what "the store knows about a line it cannot produce yet" looks like.
 
 def _build_occ_line(root: Path, tag: str, plan_: Plan, todo: list[PlanItem],
-                    device: str, build_viewer: bool, job_id: str) -> dict:
-    """The open-source line: OCC parses, AAGNet votes, the shared chain runs."""
+                    device: str, build_viewer: bool, job_id: str,
+                    *, aagnet: bool = True) -> dict:
+    """The open-source line: OCC parses, AAGNet votes, the shared chain runs.
+
+    With *aagnet* false the model is not loaded at all - not loaded and
+    ignored, but never imported - and the parts are built from an evidence
+    document that says so.  That is the ablation of node 30: the recognition
+    chain still runs, on the path it already takes when AAGNet has nothing
+    to say, and the line block records ``device=\"disabled\"`` so the next
+    plan can tell a part built without the model from one built with it.
+    """
     counts = _empty_line_counts()
     bundle = None
     if any(item.action(LINE_OCC) == stamping.BUILD for item in todo):
-        from occline.aagnet.per_face import load_aagnet_bundle
+        if aagnet:
+            from occline.aagnet.per_face import load_aagnet_bundle
 
-        print("Loading AAGNet model...")
-        bundle = load_aagnet_bundle(device)
+            print("Loading AAGNet model...")
+            bundle = load_aagnet_bundle(device)
+        else:
+            print("AAGNet disabled by --no-aagnet: not loading the model")
+            bundle = disabled_aagnet_bundle()
 
     for item in todo:
         action = item.action(LINE_OCC)
@@ -419,7 +503,8 @@ def _mark_not_built(root: Path, tag: str, items: list[PlanItem], reason: str,
 
 
 def _build_nx_line(root: Path, tag: str, plan_: Plan, todo: list[PlanItem],
-                   device: str, build_viewer: bool, job_id: str) -> dict:
+                   device: str, build_viewer: bool, job_id: str,
+                   *, aagnet: bool = True) -> dict:
     """The NX line: NX fills the PartModel, NX FBM asserts, in one session.
 
     The cheap path runs first and on its own: recomputing verdicts reads the
@@ -440,16 +525,19 @@ def _build_nx_line(root: Path, tag: str, plan_: Plan, todo: list[PlanItem],
     if not build:
         return counts
 
-    from nxline.config import NX_ROOT, nx_available, probe_license
+    from nxline.config import NX_ROOT, nx_available
     from nxline.fullnx import run_nx_line
 
     if not nx_available():
         return _mark_not_built(root, tag, build, f"NX install not found under {NX_ROOT}",
                                job_id, counts)
-    reachable, detail = probe_license()
-    if not reachable:
-        return _mark_not_built(root, tag, build, f"NX licence unavailable: {detail}",
-                               job_id, counts)
+    # No licence probe here.  "Is the install present" is a file check and
+    # stays; "is the licence server reachable" used to be a whole NX session
+    # started before every build that had anything to do - about 8 seconds
+    # paid on every successful sync to learn something the first real call
+    # learns anyway.  The driver's first translation is that call, and it
+    # fails in about the same time and comes back ``blocked``, which lands on
+    # the same named degradation below (node 26 PERF-02).
 
     staged: dict[str, tuple[Path, PlanItem]] = {}
     jobs = []
@@ -499,6 +587,24 @@ def _build_nx_line(root: Path, tag: str, plan_: Plan, todo: list[PlanItem],
             print(f"FAIL {LINE_NX} {item.partId}: {(summary.get('error') or '')[-160:]}")
             counts["error"] += 1
             continue
+        shortfall = _staging_shortfall(staging)
+        if shortfall:
+            # The summary says success and the staging directory disagrees.
+            # The staging directory is the one that built something, so the
+            # live folder is left exactly as it was and the part is failed by
+            # name (node 26E finding E-01).
+            reason = ("journal produced no artifacts: "
+                      + ", ".join(shortfall) + " missing from staging")
+            shutil.rmtree(staging, ignore_errors=True)
+            set_line(record, LINE_NX, line_block(
+                status="FAIL", stamps=stamps,
+                fingerprint_sha=record["fingerprint"]["sha256"],
+                device="nx", job_id=job_id, error=reason,
+            ))
+            save_record(record_path(root, tag, item.partId), record)
+            print(f"FAIL {LINE_NX} {item.partId}: {reason}")
+            counts["error"] += 1
+            continue
         entry = summary.get("entry", {})
         _publish(staging, live_root)
         set_line(record, LINE_NX, line_block(
@@ -519,6 +625,22 @@ def _build_nx_line(root: Path, tag: str, plan_: Plan, todo: list[PlanItem],
               f"({', '.join(f'{k}x{v}' for k, v in counts_line.items())})")
         counts["built"] += 1
     return counts
+
+
+def disabled_aagnet_bundle() -> dict:
+    """What ``_process_one`` is given when the model is switched off.
+
+    Same shape as :func:`occline.aagnet.per_face.load_aagnet_bundle`, with
+    nothing in it and a name for why.  Built here, as a plain dictionary,
+    precisely so that switching AAGNet off costs no import of it.
+    """
+    return {
+        "device": stamping.AAGNET_DISABLED,
+        "model": None,
+        "stat": None,
+        "attr_schema": None,
+        "aagnetDisabled": True,
+    }
 
 
 LINE_BUILDERS = {LINE_OCC: _build_occ_line, LINE_NX: _build_nx_line}
@@ -553,13 +675,36 @@ def _replace_with_retry(source: Path, target: Path, attempts: int = 20) -> None:
             time.sleep(0.05 * (attempt + 1))
 
 
+#: What a line folder must contain for a build of it to count as a build.
+#: Both lines write these two first and always; a staging directory without
+#: them is a build that did not happen, whatever anything else says.
+REQUIRED_STAGING_FILES = ("partmodel.json", "result.json")
+
+
+class EmptyPublication(RuntimeError):
+    """Refusal: this staging directory holds no build to publish."""
+
+
+def _staging_shortfall(staging: Path) -> list[str]:
+    return [name for name in REQUIRED_STAGING_FILES if not (staging / name).is_file()]
+
+
 def _publish(staging: Path, live: Path) -> None:
     """Move one line's staged files into place, one atomic replace each, then
     drop whatever an older build of *that line* left behind.
 
     Only the named line folder is touched: the other line's folder and the
     record above them both are not in *live* at all, so a rebuild of one line
-    can never disturb them."""
+    can never disturb them.
+
+    Publishing an empty staging directory is refused rather than performed.
+    The delete pass below is what makes a rebuild replace rather than merge,
+    and pointing it at a directory nothing was written into would erase the
+    live folder and call it a successful build (node 26E finding E-01)."""
+    shortfall = _staging_shortfall(staging)
+    if shortfall:
+        raise EmptyPublication(
+            "journal produced no artifacts: " + ", ".join(shortfall) + " missing from staging")
     live.mkdir(parents=True, exist_ok=True)
     published: set[str] = set()
     for child in sorted(staging.iterdir()):
@@ -601,6 +746,15 @@ def part_record(root: Path, tag: str, item: PlanItem) -> dict:
         record["sourceStep"] = project_relative(root, step_path)
         record["sourceStepAbs"] = str(step_path.resolve())
         record["fingerprint"] = stamping.fingerprint(step_path)
+    # ``sourceStep`` is a file name whenever the source lives outside the
+    # project; the record says so rather than leaving a reader to wonder why
+    # it has no directory part.  Written only in that case, and removed again
+    # when the source moves back inside, so a normal record is unchanged.
+    gap = project_relative_gap(root, step_path)
+    if gap:
+        record["sourceStepGap"] = gap
+    else:
+        record.pop("sourceStepGap", None)
     return record
 
 
@@ -710,7 +864,8 @@ def recompute_heuristics(project_root: str | Path, output_tag: str, part_id: str
         payload, summary = not_evaluated(reason, node_count=len(result.get("nodes") or []))
         atomic_write_text(
             paths["heuristics"],
-            json.dumps({"partId": part_id, **payload}, indent=1, ensure_ascii=False),
+            json.dumps({"partId": part_id, **payload}, ensure_ascii=False,
+                       separators=_COMPACT_JSON),
         )
         return payload, summary
     nodes = [FeatureNode.from_dict(node) for node in result.get("nodes", [])]
@@ -722,7 +877,8 @@ def recompute_heuristics(project_root: str | Path, output_tag: str, part_id: str
         registry=registry, context_factory=context_factory)
     atomic_write_text(
         paths["heuristics"],
-        json.dumps({"partId": part_id, **payload}, indent=1, ensure_ascii=False),
+        json.dumps({"partId": part_id, **payload}, ensure_ascii=False,
+                   separators=_COMPACT_JSON),
     )
     return payload, summary
 
@@ -837,12 +993,21 @@ def add_parts(
     return added
 
 
-def line_row(record: dict | None, line: str, stamps: dict[str, str]) -> dict:
+def line_row(
+    record: dict | None,
+    line: str,
+    stamps: dict[str, str],
+    *,
+    missing_artifacts: list[str] | None = None,
+) -> dict:
     """One line's state for one part, as the page reads it.
 
     ``status`` is what the line last did, ``behind`` is whether its code moved
     since - kept apart because a line can be perfectly built and still owe a
     rebuild, and the page says those two things in different places.
+    ``artifactsMissing`` is the third of those: what the record claims but the
+    disk does not have.  It is written only when something really is missing,
+    so a healthy store's rows are unchanged.
     """
     block = ((record or {}).get("lines") or {}).get(line)
     if not isinstance(block, dict):
@@ -855,11 +1020,19 @@ def line_row(record: dict | None, line: str, stamps: dict[str, str]) -> dict:
         "nodeCount": (block.get("entry") or {}).get("nodeCount"),
         "edgeCount": (block.get("entry") or {}).get("edgeCount"),
         "featureCounts": (block.get("entry") or {}).get("featureCounts"),
+        # Per-line, for the same reason ``store.index._line_summary`` states
+        # them per line: how many of the source STEP's faces this line left
+        # unclaimed is this line's answer, not the open-source line's (G-06).
+        "rawCadFaceCount": (block.get("viewerEntry") or {}).get("rawCadFaceCount"),
+        "unclaimedRawCadFaceCount":
+            (block.get("viewerEntry") or {}).get("unclaimedRawCadFaceCount"),
         "heuristicCounts": block.get("heuristicCounts") or {},
     }
     for key in ("reason", "error"):
         if block.get(key):
             row[key] = block[key]
+    if missing_artifacts:
+        row["artifactsMissing"] = list(missing_artifacts)
     return row
 
 
@@ -880,13 +1053,26 @@ def store_status(project_root: str | Path, output_tag: str = "latest", input_pat
         input_abs = resolve_input_path(source, root)
         input_root = input_abs if input_abs.is_dir() else input_abs.parent
         steps = {make_part_id(path, input_root): path for path in collect_step_files(input_abs)}
-    stamps = stamping.layer_stamps(root)
+    # A status row is read, never acted on: the plan re-derives the table for
+    # itself before it decides anything.  So the viewer's poll may reuse an
+    # answer this recent instead of stat-ing a few hundred files every two
+    # seconds; a one-shot ``store status`` is a fresh process and never hits it.
+    stamps = stamping.layer_stamps(root, max_age=STATUS_STAMP_MAX_AGE)
     rows: list[dict] = []
     for part_id in sorted(set(records) | set(steps)):
         record = records.get(part_id)
         verdict = stamping.light(record, steps.get(part_id))
         fingerprint = (record or {}).get("fingerprint") or {}
-        lines = {line: line_row(record, line, stamps) for line in LINE_ORDER}
+        lines = {
+            line: line_row(
+                record, line, stamps,
+                missing_artifacts=missing_line_artifacts(
+                    root, output_tag, part_id, line,
+                    viewer_built=bool((get_line(record, line) or {}).get("viewerEntry")),
+                ) if (get_line(record, line) or {}).get("status") == "PASS" else None,
+            )
+            for line in LINE_ORDER
+        }
         occ = lines[LINE_OCC]
         rows.append({
             "partId": part_id,

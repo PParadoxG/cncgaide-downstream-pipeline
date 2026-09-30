@@ -13,9 +13,14 @@ Three groups live here:
 
 * the context and its indexes (nodes by id, edges by type, the LOCATED_ON
   terminal table), built once per part instead of once per heuristic;
-* the query-time derived predicates of catalogue 02 chapter 7
-  (``SHARES_HOST`` / ``PARALLEL_AXIS`` / ``ORTHOGONAL_AXIS``), which are facts
-  a heuristic may use but are not relations and are never materialized;
+* ``hosts_of``, the query-time reading of catalogue 02 chapter 7's
+  ``SHARES_HOST`` - a fact a heuristic may use, not a relation, never
+  materialized.  Its two axis siblings (``PARALLEL_AXIS`` /
+  ``ORTHOGONAL_AXIS``) used to live here and were removed in node 27: they
+  read ``feature_axis``, which is a v5.1 attribute name and therefore not
+  something this layer is allowed to know, and in two ontologies and seventy
+  rule modules nothing had ever called them.  A dialect that wants them
+  writes them beside its own rules, where the axis has a name;
 * the tolerance-aware ``distinct`` operator and the aggregate missing-value
   rule of catalogue 03 chapters 0.6 and 0.7.
 """
@@ -98,10 +103,6 @@ class HeuristicContext:
         )
 
     # -- nodes and attributes ---------------------------------------------
-    def nodes_of(self, types: Iterable[str]) -> list:
-        wanted = frozenset(types)
-        return [node for node in self.nodes if node.featureType in wanted]
-
     def domain_nodes(self, h_id: str) -> list:
         """Instances of the leaf classes this heuristic applies to.
 
@@ -118,9 +119,24 @@ class HeuristicContext:
         return self.attributes(node).get(name)
 
     def attribute_state(self, node, name: str) -> tuple[str, str]:
-        """``(state, reason)`` for one attribute on one instance."""
+        """``(state, reason)`` for one attribute on one instance.
+
+        A key that is not on the instance is two different findings and the
+        class attribute table is what tells them apart: the class does not
+        carry this attribute at all (structural, a property of the class), or
+        the class declares it and this recognizer did not emit it (a gap, a
+        property of the part).  Only the first is NOT_APPLICABLE; the second
+        is NOT_EVALUABLE with a record, because a heuristic that quietly
+        vanishes on a batch of parts is exactly what a structural bucket
+        hides.  The nx dialect has asked this question since node 20'b; this
+        is the v5.1 side of the same gate.
+        """
         attributes = self.attributes(node)
         if name not in attributes:
+            if name in self.registry.leaf_attributes(node.featureType):
+                return ATTR_GAP, (
+                    f"{node.featureType} declares {name} and it was not published "
+                    f"on {node.nodeId}")
             return ATTR_ABSENT, f"{name} is not in the attribute set of {node.featureType}"
         if attributes[name] is None:
             reason = (getattr(node, "missingAttributes", {}) or {}).get(name)
@@ -268,24 +284,6 @@ class HeuristicContext:
     # -- derived predicates (catalogue 02 chapter 7) -----------------------
     def hosts_of(self, node_id: str) -> set[str]:
         return {entry["hostOwnerNodeId"] for entry in self.terminals_of(node_id) if entry["hostOwnerNodeId"]}
-
-    def shares_host(self, a: str, b: str) -> bool:
-        """SHARES_HOST: two features resolve to intersecting effective hosts."""
-        return bool(self.hosts_of(a) & self.hosts_of(b))
-
-    def parallel_axis(self, a, b, tolerance_deg: float = 1.0) -> bool | None:
-        """PARALLEL_AXIS over undirected feature axes; ``None`` when unknown."""
-        left, right = unit(self.attribute(a, "feature_axis")), unit(self.attribute(b, "feature_axis"))
-        if left is None or right is None:
-            return None
-        return acute_angle_deg(left, right) <= tolerance_deg
-
-    def orthogonal_axis(self, a, b, tolerance_deg: float = 1.0) -> bool | None:
-        """ORTHOGONAL_AXIS over undirected feature axes; ``None`` when unknown."""
-        left, right = unit(self.attribute(a, "feature_axis")), unit(self.attribute(b, "feature_axis"))
-        if left is None or right is None:
-            return None
-        return abs(acute_angle_deg(left, right) - 90.0) <= tolerance_deg
 
 
 # ---------------------------------------------------------------- geometry

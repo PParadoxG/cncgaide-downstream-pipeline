@@ -34,7 +34,9 @@ from features._shared.band_endpoints import (
     SolidPointClassifier,
     resolve_endpoint,
 )
-from features._shared.closed_wall_band import EdgeIndex, build_edge_index, face_sort_key
+from features._shared.closed_wall_band import EdgeIndex, build_edge_index
+from topology.faces import face_sort_key
+from topology.vectors import coerced_unit_vector, dot, norm
 from features._shared.open_sweep import OpenSweepAnalysis, OpenSweepCandidate
 from features._shared.transition_evidence import TransitionEvidence
 
@@ -144,10 +146,11 @@ def resolve_open_sweep_candidates(
     transition: TransitionEvidence,
     kernel: Any | None = None,
     claimed_face_ids: set[str] | None = None,
+    edge_index: EdgeIndex | None = None,
 ) -> list[CandidateResolution]:
     """Resolve OS candidates once for the Slot and Step owning modules."""
 
-    index = build_edge_index(model)
+    index = edge_index if edge_index is not None else build_edge_index(model)
     classifier = SolidPointClassifier(kernel)
     resolutions: list[CandidateResolution] = []
     claimed = set(claimed_face_ids or ())
@@ -434,15 +437,19 @@ def simple_step_structure(model: PartModel, candidate: OpenSweepCandidate) -> di
     normals = [_plane_normal(model.faces[face_id]) for face_id in faces]
     if any(item is None for item in normals):
         return {"passed": False, "detail": "one Step planar face has no usable normal"}
-    dot = abs(_dot(normals[0], normals[1]))
-    if dot >= 1.0 - _PLANE_PARALLEL_TOL:
+    alignment = abs(dot(normals[0], normals[1]))
+    if alignment >= 1.0 - _PLANE_PARALLEL_TOL:
         return {"passed": False, "detail": "the two Step planes are coplanar/parallel, so the included angle is not below 180 degrees"}
-    included = math.degrees(math.acos(max(-1.0, min(1.0, dot))))
+    included = math.degrees(math.acos(max(-1.0, min(1.0, alignment))))
     return {
         "passed": True,
         "faceIds": faces,
         "sharedStraightEdgeId": candidate.internal_rail_edge_ids[0],
-        "includedPlaneAngleDeg": round(included, 6),
+        # Finding C-07: this is the acute angle between the two plane normals,
+        # not the included angle of the step - the attribute
+        # ``step_included_angle`` is that, and is a different number.  Named
+        # for what it measures so the two are not read as one.
+        "planeNormalSeparationDeg": round(included, 6),
         "anglePolicy": "non-coplanar structural check only; no 90-degree or threshold classification",
     }
 
@@ -476,7 +483,7 @@ def prove_two_ended_exterior(
         })
         return result
 
-    direction = _unit(candidate.course_direction)
+    direction = coerced_unit_vector(candidate.course_direction)
     span = max(abs(candidate.course_end - candidate.course_start), 1.0)
     # Keep the probe local to the canonical end.  A closed cap must not be
     # skipped by a large ray, while an exterior opening is clear immediately.
@@ -563,10 +570,10 @@ def prove_transverse_enclosure(
         })
         return result
 
-    course = _unit(candidate.course_direction)
+    course = coerced_unit_vector(candidate.course_direction)
     centres = [[sum(p[i] for p in item) / len(item) for i in range(3)] for item in stations]
     chord = _perpendicular(centres[1], centres[0], course)
-    span = _norm([centres[1][i] - centres[0][i] for i in range(3)])
+    span = norm([centres[1][i] - centres[0][i] for i in range(3)])
     middle = [(centres[0][i] + centres[1][i]) / 2.0 for i in range(3)]
     interior = _profile_interior_sample(
         _end_profile_points(model, candidate, "start"), course, candidate.course_start
@@ -652,13 +659,9 @@ def _perpendicular(head: list[float] | None, tail: list[float], axis: list[float
         return None
     delta = [head[index] - tail[index] for index in range(3)]
     if axis is not None:
-        along = _dot(delta, axis)
+        along = dot(delta, axis)
         delta = [delta[index] - along * axis[index] for index in range(3)]
-    return _unit(delta)
-
-
-def _norm(vector: list[float]) -> float:
-    return math.sqrt(sum(value * value for value in vector))
+    return coerced_unit_vector(delta)
 
 
 def _end_profile_points(model: PartModel, candidate: OpenSweepCandidate, end: str) -> list[list[float]]:
@@ -689,7 +692,7 @@ def _end_profile_points(model: PartModel, candidate: OpenSweepCandidate, end: st
     # the mouth chord, is a cavity sample rather than an arbitrary average of
     # tessellation points.  The raw end-boundary samples remain a fallback for
     # singleton cylindrical profiles, which have no internal rails.
-    direction = _unit(candidate.course_direction)
+    direction = coerced_unit_vector(candidate.course_direction)
     if direction is not None:
         level = candidate.course_start if end == "start" else candidate.course_end
         rails = [*candidate.profile_terminal_rail_edge_ids, *candidate.internal_rail_edge_ids]
@@ -701,7 +704,7 @@ def _end_profile_points(model: PartModel, candidate: OpenSweepCandidate, end: st
             ]
         path = []
         for edge_id in rails:
-            point = _edge_point_at_level(model, edge_id, direction, level, end)
+            point = _edge_extreme_point_along(model, edge_id, direction, end)
             if point is not None:
                 path.append(point)
         if len(path) >= 3:
@@ -709,7 +712,7 @@ def _end_profile_points(model: PartModel, candidate: OpenSweepCandidate, end: st
     return points
 
 
-def _edge_point_at_level(model, edge_id, direction, level, end):
+def _edge_extreme_point_along(model, edge_id, direction, end):
     edge = model.edges.get(edge_id)
     if edge is None:
         return None
@@ -722,7 +725,7 @@ def _edge_point_at_level(model, edge_id, direction, level, end):
         ]
     if not points:
         return None
-    key = lambda point: _dot(point, direction)
+    key = lambda point: dot(point, direction)
     return list((min if end == "start" else max)(points, key=key))
 
 
@@ -731,7 +734,7 @@ def _profile_interior_sample(points: list[list[float]], direction: list[float], 
         return None
     projected: list[list[float]] = []
     for point in points:
-        correction = _dot(point, direction) - level
+        correction = dot(point, direction) - level
         projected.append([point[index] - correction * direction[index] for index in range(3)])
     center = [sum(point[index] for point in projected) / len(projected) for index in range(3)]
     if not all(math.isfinite(value) for value in center):
@@ -743,26 +746,9 @@ def _plane_normal(face) -> list[float] | None:
     if face is None:
         return None
     value = face.parameters.get("normal")
-    unit = _unit(value)
+    unit = coerced_unit_vector(value)
     if unit is None:
         return None
     if face.is_reversed:
         unit = [-value for value in unit]
     return unit
-
-
-def _unit(value: object) -> list[float] | None:
-    if not isinstance(value, (list, tuple)) or len(value) != 3:
-        return None
-    try:
-        values = [float(item) for item in value]
-    except (TypeError, ValueError):
-        return None
-    norm = math.sqrt(sum(value * value for value in values))
-    if norm <= _VECTOR_TOL or not all(math.isfinite(value) for value in values):
-        return None
-    return [value / norm for value in values]
-
-
-def _dot(left: list[float], right: list[float]) -> float:
-    return sum(float(left[index]) * float(right[index]) for index in range(3))

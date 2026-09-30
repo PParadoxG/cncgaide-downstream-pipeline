@@ -272,12 +272,22 @@ def band_corner_radius(
         diagnostics["sharpConcaveCornerRims"] = sorted({item.label for item, _ in sharp})
         return 0.0, diagnostics
 
-    corner_faces, convex = corner_wall_faces(model, frame, wall_face_ids)
+    corner_faces, convex, undecided = corner_wall_faces(model, frame, wall_face_ids)
     candidates = corner_wall_radii(model, corner_faces, footprints)
     diagnostics["candidates"] = candidates
     diagnostics["nonInternalCornerFaceIds"] = convex
+    diagnostics["undecidedCornerFaceIds"] = undecided
     if not candidates:
-        detail = f"only convex/outward corner faces are present ({','.join(convex)})" if convex else "no corner face is in the band at all"
+        # One clause per answer the material side gave, so the refusal cannot
+        # report "they are all convex" about a face nobody could measure.
+        clauses = []
+        if convex:
+            clauses.append(f"convex/outward corner faces ({','.join(convex)})")
+        if undecided:
+            clauses.append(
+                f"corner faces whose material side could not be decided ({','.join(undecided)})")
+        detail = f"the band carries only {' and '.join(clauses)}" if clauses \
+            else "no corner face is in the band at all"
         diagnostics["basis"] = "blended_corner_without_band_face"
         diagnostics["reason"] = (
             f"every concave corner on both principal rims is blended, but the radius is not carried by the "
@@ -293,28 +303,36 @@ def corner_wall_faces(
     model: PartModel,
     frame: BandFrame,
     wall_face_ids,
-) -> tuple[list[str], list[str]]:
-    """Split the band walls into those that carry an internal corner radius,
-    and those that turn the other way.
+) -> tuple[list[str], list[str], list[str]]:
+    """Split the band walls three ways, because the question has three answers.
 
     A corner wall is a cylinder or cone revolved about the feature axis with
     the material *outside* its surface.  The convex corner of a re-entrant
     outline has its material inside and is not what the corner-radius rule is
-    about; it is returned separately so the refusal can name it.
+    about.  ``material_is_outside`` also answers ``None`` - no sample point, or
+    samples that disagree - which is a refusal, not a convex corner.
+
+    Finding C-09: the two were merged, so a face nobody could measure was
+    reported as "only convex/outward corner faces are present".  Returned as
+    ``(corners, convex, undecided)`` so the refusal can say which it is.
     """
     corners: list[str] = []
     convex: list[str] = []
+    undecided: list[str] = []
     for face_id in sorted(set(wall_face_ids), key=face_sort_key):
         face = model.faces.get(face_id)
         if face is None or face.surface_type not in (SurfaceType.CYLINDER, SurfaceType.CONE):
             continue
         if not parallel(face.parameters.get("axis_direction"), frame.axis):
             continue
-        if material_is_outside(model, face_id) is not True:
+        outside = material_is_outside(model, face_id)
+        if outside is True:
+            corners.append(face_id)
+        elif outside is False:
             convex.append(face_id)
-            continue
-        corners.append(face_id)
-    return corners, convex
+        else:
+            undecided.append(face_id)
+    return corners, convex, undecided
 
 
 def corner_wall_radii(model: PartModel, face_ids, footprints: list[RimFootprint]) -> list[dict]:

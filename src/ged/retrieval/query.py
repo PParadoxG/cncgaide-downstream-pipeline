@@ -21,7 +21,13 @@ class Ranked:
 
 
 def prefilter_score(query: GedGraph, candidate: GedGraph) -> float:
-    """Leaf-histogram L1 (normalised) plus an L_ref ratio term, in [0, 2]."""
+    """Leaf-histogram L1 (normalised) plus an L_ref ratio term, in [0, 2].
+
+    Reads only ``type_histogram()`` and ``l_ref``; a caller that can answer
+    those without projecting may pass anything that does (node 26 FP-2, where
+    the service passes a lazy candidate and lets ``solve`` decide whether a
+    graph is needed at all).
+    """
     hq = query.type_histogram()
     hc = candidate.type_histogram()
     keys = set(hq) | set(hc)

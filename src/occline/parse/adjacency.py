@@ -71,6 +71,41 @@ def _build_shape_lookups(shape: TopoDS_Shape) -> tuple[dict[int, TopoDS_Face], d
     return faces, edges
 
 
+class ShapeTopology:
+    """The three tables both adjacency passes need, built once per shape.
+
+    ``build_adjacency_infos`` and ``detect_seam_edges`` used to build the
+    edge-face incidence map and the hash lookups one each, and the seam pass
+    then re-derived a face's surface parameters once per shared edge - five
+    times over for a face on a five-edge boundary.  None of it can change
+    inside one parse: the shape is loaded, read and never modified.  So the
+    tables are built once and handed to both passes, and the surface
+    parameters are remembered per face rather than per edge visit.
+
+    Scoped to one shape on purpose.  A module-level cache keyed on
+    ``hash(face)`` would be a correctness bug, not an optimisation: two parts
+    alive in one process (a batch refresh, a replay test) hash their own faces
+    into the same space.
+    """
+
+    def __init__(self, shape: TopoDS_Shape) -> None:
+        self.edge_face_map = build_edge_face_map(shape)
+        self.face_lookup, self.edge_lookup = _build_shape_lookups(shape)
+        self._surfaces: dict[int, tuple[SurfaceType, dict]] = {}
+
+    def surface(self, face_hash: int, face: TopoDS_Face) -> tuple[SurfaceType, dict]:
+        """``extract_face_geometry(face)``, computed at most once per face.
+
+        Raises whatever the extraction raises; a failure is not cached, so a
+        caller that swallows it sees the same behaviour on the next visit.
+        """
+        cached = self._surfaces.get(face_hash)
+        if cached is None:
+            cached = extract_face_geometry(face)
+            self._surfaces[face_hash] = cached
+        return cached
+
+
 # ---------------------------------------------------------------------------
 # Concavity detection
 # ---------------------------------------------------------------------------
@@ -284,14 +319,19 @@ def build_edge_face_map(shape: TopoDS_Shape) -> dict[int, list[int]]:
 # Public API — adjacency with concavity
 # ---------------------------------------------------------------------------
 
-def build_adjacency_infos(shape: TopoDS_Shape) -> dict[int, list[AdjacencyInfo]]:
+def build_adjacency_infos(shape: TopoDS_Shape,
+                          topology: "ShapeTopology | None" = None) -> dict[int, list[AdjacencyInfo]]:
     """Return ``{face_hash: [AdjacencyInfo, ...]}`` with concavity classified.
 
     Calls ``detect_concavity`` for every shared edge to determine
     ``CONCAVE``, ``CONVEX``, ``SMOOTH``, or ``UNKNOWN``.
+
+    *topology* is the shared per-shape cache; one is built when the caller has
+    none, so the function stands alone exactly as it did.
     """
-    edge_face_map = build_edge_face_map(shape)
-    face_lookup, edge_lookup = _build_shape_lookups(shape)
+    topology = topology or ShapeTopology(shape)
+    edge_face_map = topology.edge_face_map
+    face_lookup, edge_lookup = topology.face_lookup, topology.edge_lookup
 
     # Group by face for output
     result: dict[int, list[AdjacencyInfo]] = defaultdict(list)
@@ -332,7 +372,8 @@ def build_adjacency_infos(shape: TopoDS_Shape) -> dict[int, list[AdjacencyInfo]]
 # Public API — seam-edge detection
 # ---------------------------------------------------------------------------
 
-def detect_seam_edges(shape: TopoDS_Shape) -> set[int]:
+def detect_seam_edges(shape: TopoDS_Shape,
+                      topology: "ShapeTopology | None" = None) -> set[int]:
     """Return the set of edge hashes that are seam edges.
 
     A seam edge separates two faces that belong to the **same underlying
@@ -346,9 +387,10 @@ def detect_seam_edges(shape: TopoDS_Shape) -> set[int]:
     exporter pre-splits a cylinder into half-faces, neither half-face is
     closed in UV space, so ``IsClosed`` returns ``False`` even though the
     edge is semantically a seam.
-    """
-    import math
 
+    *topology* is the shared per-shape cache; one is built when the caller has
+    none, so the function stands alone exactly as it did.
+    """
     _RADIUS_TOL = 1e-6
     _AXIS_ANGLE_TOL = 1e-4
     _AXIS_DIST_TOL = 1e-4
@@ -397,8 +439,9 @@ def detect_seam_edges(shape: TopoDS_Shape) -> set[int]:
         # CONE, SPHERE, TORUS, BSPLINE, OTHER — not recognised as seam sources
         return False
 
-    edge_face_map = build_edge_face_map(shape)
-    face_lookup, _ = _build_shape_lookups(shape)
+    topology = topology or ShapeTopology(shape)
+    edge_face_map = topology.edge_face_map
+    face_lookup = topology.face_lookup
 
     seam_edges: set[int] = set()
 
@@ -411,8 +454,8 @@ def detect_seam_edges(shape: TopoDS_Shape) -> set[int]:
             continue
 
         try:
-            st_a, p_a = extract_face_geometry(face_a)
-            st_b, p_b = extract_face_geometry(face_b)
+            st_a, p_a = topology.surface(face_hashes[0], face_a)
+            st_b, p_b = topology.surface(face_hashes[1], face_b)
         except Exception:
             continue
 
@@ -420,8 +463,3 @@ def detect_seam_edges(shape: TopoDS_Shape) -> set[int]:
             seam_edges.add(edge_hash)
 
     return seam_edges
-
-
-# ---------------------------------------------------------------------------
-# Public API — shell connectivity
-# ---------------------------------------------------------------------------

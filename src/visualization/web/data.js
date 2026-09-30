@@ -6,6 +6,74 @@
 
 const NEUTRAL = '#8d97a3';
 
+// ------------------------------------------------------------ which build
+//
+// A part is four files, fetched in parallel, and the store publishes a new
+// build one os.replace at a time: "old view.json, new mesh.json" is reachable
+// while a refresh lands, and the page would draw it without noticing (node 26
+// G-03).  The guard is a demand rather than a check after the fact — every
+// request for run data carries `If-Match` naming the build the page started
+// on, and the server answers 409 instead of a file from another build
+// (server.py::_if_match_satisfied).  A 409 becomes `RunChanged`, which the
+// pages already know what to do with: it is a part that failed to load, and
+// the named degradation path takes the part off screen and says why.
+//
+// Unset (a page that never learned a run id) means no demand and no change
+// in behaviour, which is also what an older page gets from the new server.
+
+let expectedRun = null;
+
+/** The build this page reads.  Set once, from the index the page loaded. */
+export function setExpectedRun(runId) {
+  expectedRun = runId || null;
+}
+
+export function currentExpectedRun() {
+  return expectedRun;
+}
+
+/** The validator the server stamps run data with; `null` when unknown. */
+export function runValidator(runId) {
+  return runId ? `W/"${runId}"` : null;
+}
+
+export class RunChanged extends Error {
+  constructor(runId) {
+    super('the run was rebuilt while this page was reading it'
+      + (runId ? ` (the store now serves ${runId})` : ''));
+    this.name = 'RunChanged';
+    this.runId = runId || null;
+  }
+}
+
+function runOptions() {
+  const validator = runValidator(expectedRun);
+  return validator ? { cache: 'no-store', headers: { 'If-Match': validator } } : { cache: 'no-store' };
+}
+
+async function fetchRunFile(url) {
+  const response = await fetch(url, runOptions());
+  if (response.status === 409) {
+    let runId = null;
+    try { runId = (await response.json()).runId || null; } catch { runId = null; }
+    throw new RunChanged(runId);
+  }
+  return assertOk(response);
+}
+
+/**
+ * The build every response claimed, when they all claim the same one.
+ *
+ * Belt to the `If-Match` braces, and the only guard a page has before it
+ * knows its run id: the validators of the files that were just assembled into
+ * one model have to agree, or the model is a mixture of two builds.
+ */
+function oneRunOnly(responses) {
+  const tags = new Set(responses.map((r) => r && r.headers && r.headers.get('ETag')).filter(Boolean));
+  if (tags.size > 1) throw new RunChanged(null);
+  return [...tags][0] || null;
+}
+
 export async function loadIndex() {
   const response = await fetch('data/index.json');
   if (!response.ok) throw new Error(`viewer index unavailable (HTTP ${response.status})`);
@@ -15,8 +83,16 @@ export async function loadIndex() {
 // A part directory holds one folder per line, both carrying the *same* file
 // names, so switching lines is a change of one path segment and nothing else.
 // The mesh is per line too: each line tessellates with its own kernel.
+//
+// The folder *is* the line id (contract/registry.py), so there is no mapping
+// to keep in step here — and no default either.  A caller that forgets to say
+// which line it wants is refused rather than handed one: the fallback this
+// replaced returned the open-source folder, which is how the statistics view
+// came to read v5.1 verdicts under the NX line's counts without anything
+// failing.  An unknown line asks for a folder that is not there and says so.
 export function lineFolder(line) {
-  return line === 'nx' ? 'nx' : 'occ';
+  if (!line) throw new Error('lineFolder: no line named');
+  return line;
 }
 
 function partBase(partId, line) {
@@ -25,16 +101,21 @@ function partBase(partId, line) {
 
 export async function loadPart(partId, line) {
   const base = partBase(partId, line);
-  const [view, mesh, buffer, heuristics] = await Promise.all([
-    fetch(base + 'view.json').then(assertOk).then((r) => r.json()),
-    fetch(base + 'mesh.json').then(assertOk).then((r) => r.json()),
-    fetch(base + 'mesh.bin').then(assertOk).then((r) => r.arrayBuffer()),
+  const [viewResponse, meshResponse, bufferResponse, heuristics] = await Promise.all([
+    fetchRunFile(base + 'view.json'),
+    fetchRunFile(base + 'mesh.json'),
+    fetchRunFile(base + 'mesh.bin'),
     // Optional on purpose: a run produced before the heuristic layer existed
     // still opens, with the panel saying so instead of the page failing.
     loadHeuristics(base),
   ]);
+  const runId = oneRunOnly([viewResponse, meshResponse, bufferResponse]);
+  const [view, mesh, buffer] = await Promise.all([
+    viewResponse.json(), meshResponse.json(), bufferResponse.arrayBuffer(),
+  ]);
   const model = buildModel(view, mesh, buffer, heuristics);
-  model.line = line || 'occ';
+  model.line = line;
+  model.runValidator = runId;
   return model;
 }
 
@@ -49,10 +130,12 @@ export async function loadPart(partId, line) {
  */
 export async function loadPartGeometry(partId, meshFrom, shownAs) {
   const base = partBase(partId, meshFrom);
-  const [mesh, buffer] = await Promise.all([
-    fetch(base + 'mesh.json').then(assertOk).then((r) => r.json()),
-    fetch(base + 'mesh.bin').then(assertOk).then((r) => r.arrayBuffer()),
+  const [meshResponse, bufferResponse] = await Promise.all([
+    fetchRunFile(base + 'mesh.json'),
+    fetchRunFile(base + 'mesh.bin'),
   ]);
+  const runId = oneRunOnly([meshResponse, bufferResponse]);
+  const [mesh, buffer] = await Promise.all([meshResponse.json(), bufferResponse.arrayBuffer()]);
   const faces = {};
   for (const record of mesh.faces) {
     faces[String(record.cadFaceId)] = {
@@ -68,7 +151,6 @@ export async function loadPartGeometry(partId, meshFrom, shownAs) {
   const view = {
     partId,
     sourceStep: null,
-    outputTag: null,
     nodes: [],
     edges: [],
     relationTypes: [],
@@ -83,13 +165,28 @@ export async function loadPartGeometry(partId, meshFrom, shownAs) {
   };
   const model = buildModel(view, mesh, buffer, null);
   model.geometryOnly = true;
-  model.line = shownAs || meshFrom || 'occ';
+  model.line = shownAs || meshFrom;
+  model.runValidator = runId;
   return model;
 }
 
 export async function loadHeuristics(base) {
+  let response;
   try {
-    const response = await fetch(base + 'heuristics.json');
+    response = await fetch(base + 'heuristics.json', runOptions());
+  } catch (error) {
+    return null;
+  }
+  // "This build has no heuristics" and "this is not your build" are different
+  // answers: the first is the missing-layer case this function exists for,
+  // the second must reach the caller or the part quietly loses its verdicts
+  // while the rest of it comes from the older build.
+  if (response.status === 409) {
+    let runId = null;
+    try { runId = (await response.json()).runId || null; } catch { runId = null; }
+    throw new RunChanged(runId);
+  }
+  try {
     return response.ok ? await response.json() : null;
   } catch (error) {
     return null;
@@ -160,8 +257,10 @@ function buildModel(view, mesh, buffer, heuristics) {
 
   return {
     partId: view.partId,
+    // No `outputTag`: the per-part view no longer states which run it sits in
+    // (F-14), and nothing on any page ever read the field.  The tag is on the
+    // index, which is where the footer takes it from.
     sourceStep: view.sourceStep,
-    outputTag: view.outputTag,
     nodes: view.nodes,
     relationTypes,
     defaultHiddenFeatureTypes: view.defaultHiddenFeatureTypes || [],

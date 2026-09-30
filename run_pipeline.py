@@ -33,6 +33,9 @@ def build_parser() -> argparse.ArgumentParser:
                          help="keep parts whose source STEP is gone (they are dropped by default)")
     refresh.add_argument("--no-nx", action="store_true",
                          help="build the open-source line only, leaving the NX line as it is")
+    refresh.add_argument("--no-aagnet", action="store_true",
+                         help="build the open-source line without AAGNet: the model is not "
+                              "loaded and the evidence document records that it was disabled")
     refresh.add_argument("--dry-run", action="store_true", help="print the plan and exit")
 
     store = commands.add_parser("store", help="inspect and maintain the parts store (runs/<tag>)")
@@ -118,7 +121,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     eval_cmd = ged_commands.add_parser("eval-variants", help="within-family ranking / pose / self-retrieval report")
     eval_cmd.add_argument("--output-tag", default="variants")
-    eval_cmd.add_argument("--report", default=None, help="report path; default runs/<tag>/ged/GED_VARIANT_REPORT.md")
+    # One report per line: the two are written in different ontologies and
+    # priced on different scales, so they must not overwrite each other.
+    # A JSON twin is written beside whatever path this resolves to.
+    eval_cmd.add_argument("--report", default=None,
+                          help="report path; default runs/<tag>/ged/GED_VARIANT_REPORT_<line>.md")
     cost_options(eval_cmd)
     return parser
 
@@ -164,8 +171,13 @@ def main(argv: list[str] | None = None) -> int:
 
 def _run_refresh(args) -> int:
     from contract.registry import LINE_OCC, LINE_ORDER
-    from store import sync
+    from store import stamps, sync
 
+    # With the model off the plan must ask for the device the build will
+    # record, not for the one it would have inferred on: that is what makes a
+    # part built without AAGNet out of date the moment the model comes back,
+    # and a part built with it out of date the moment it goes away.
+    device = stamps.AAGNET_DISABLED if args.no_aagnet else args.device
     try:
         plan = sync.plan(
             PROJECT_ROOT,
@@ -176,6 +188,7 @@ def _run_refresh(args) -> int:
             limit=args.limit,
             build_viewer=not args.no_viewer,
             lines=(LINE_OCC,) if args.no_nx else LINE_ORDER,
+            device=device,
         )
     except ValueError as error:
         print(f"[refresh] {error}")
@@ -184,8 +197,8 @@ def _run_refresh(args) -> int:
         print(plan.describe())
         return 0
     summary = sync.execute(
-        plan, device=args.device, build_viewer=not args.no_viewer,
-        keep_missing=args.keep_missing,
+        plan, device=device, build_viewer=not args.no_viewer,
+        keep_missing=args.keep_missing, aagnet=not args.no_aagnet,
     )
     manifest = summary["manifest"]
     # One line on purpose: it is the last thing the page's job bar shows.
@@ -219,6 +232,10 @@ def _run_store(args) -> int:
             lines = "  ".join(
                 f"{name}={(state.get('status') or 'none').lower()}"
                 + (f"({state['reason']})" if state.get("reason") else "")
+                # A line whose record says PASS while its files are gone reads
+                # as PASS everywhere else; this is where it stops doing that.
+                + (f"(artifacts missing: {','.join(state['artifactsMissing'])})"
+                   if state.get("artifactsMissing") else "")
                 for name, state in (row.get("lines") or {}).items()
             )
             print(
@@ -268,8 +285,8 @@ def _run_store(args) -> int:
         print(f"[store] snapshot written to {target}")
         return 0
 
+    # argparse exits from --help, so nothing after this line runs.
     build_parser().parse_args(["store", "--help"])
-    return 0
 
 
 def _run_ged(args) -> int:
@@ -352,29 +369,46 @@ def _run_ged(args) -> int:
         return 0
 
     if args.ged_command == "eval-variants":
-        from ged.eval.variants import evaluate, write_report
+        from ged.eval.variants import evaluate, write_payload, write_report
         from ged.retrieval.corpus import load_corpus
 
         corpus = load_corpus(run_root, line=args.line)
         if corpus.failed:
             print(f"[ged] {len(corpus.failed)} part(s) failed to project: {corpus.failed}")
         evaluation = evaluate(corpus, config=config)
-        report = Path(args.report) if args.report else run_root / "ged" / "GED_VARIANT_REPORT.md"
+        report = Path(args.report) if args.report else (
+            run_root / "ged" / f"GED_VARIANT_REPORT_{args.line}.md")
         write_report(evaluation, report)
-        print(f"[ged] config {info['name']} #{info['hash']}")
+        # The machine-readable twin, beside the markdown: node 31 reads the
+        # numbers back rather than parsing tables out of prose.
+        payload_path = write_payload(evaluation, report.with_suffix(".json"))
+        print(f"[ged] config {info['name']} #{info['hash']} semantics {evaluation.semantics}")
         for fam in evaluation.families:
             status = "PASS" if fam.passed else "FAIL"
             detail = ""
             if fam.inversions:
-                detail = " inversions: " + "; ".join(f"{a} > {b}" for a, b in fam.inversions)
+                detail = " inversions: " + "; ".join(
+                    f"{axis} {lo} > {hi}" for axis, lo, hi in fam.inversions)
             if fam.pose_failures:
                 detail += " pose failures: " + ", ".join(fam.pose_failures)
             if fam.pose_drift:
                 detail += " identification drift: " + ", ".join(fam.pose_drift)
             print(f"[ged] {fam.family} {status} ({len(fam.rows)} members){detail}")
         if evaluation.nearest_neighbour_failures:
-            print(f"[ged] nearest-neighbour failures: {len(evaluation.nearest_neighbour_failures)}")
-        print(f"[ged] {'PASS' if evaluation.passed else 'FAIL'}: report written to {report}")
+            print(f"[ged] self-retrieval failures: {len(evaluation.nearest_neighbour_failures)}")
+            for failure in evaluation.nearest_neighbour_failures:
+                # ASCII arrow: this line goes to a console that may be cp936.
+                print(f"[ged]   {failure['member']} -> {failure['nearest']} "
+                      f"({failure['distance']:.6f}); expected {failure['expected']}")
+        if evaluation.outcome == "NOT_EVALUABLE":
+            # A gate with nothing to judge must not answer "pass" (node 26
+            # F-03): a mistyped tag and an unrefreshed variant corpus both
+            # land here, and both used to exit 0.
+            print(f"[ged] NOT EVALUABLE: no variant family in {run_root} "
+                  f"(a family is part ids sharing a V<b>.<axis><level>_ prefix)")
+            print(f"[ged] report written to {report} and {payload_path}")
+            return 2
+        print(f"[ged] {evaluation.outcome}: report written to {report} and {payload_path}")
         return 0 if evaluation.passed else 1
 
     return 0

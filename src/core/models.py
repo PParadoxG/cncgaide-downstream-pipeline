@@ -10,6 +10,18 @@ from dataclasses import asdict, dataclass, field
 from typing import Any
 
 
+class ReservedAttributeName(ValueError):
+    """An attribute is named like one of the keys a node writes for itself.
+
+    Raised instead of resolving the collision, because either resolution is a
+    lie: letting the attribute win rewrites the node's identity, letting the
+    structure win drops a value the recogniser stated.  The NX line publishes
+    vendor attribute names verbatim, so the set of attribute names is not
+    under this repository's control - which is exactly why the collision is
+    refused out loud rather than guessed at.
+    """
+
+
 @dataclass
 class FeatureNode:
     """One ontology-named feature with direct, ontology-named attributes."""
@@ -28,7 +40,19 @@ class FeatureNode:
     derived: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
-        """Flatten ontology attributes onto the node's top level."""
+        """Flatten ontology attributes onto the node's top level.
+
+        Raises :class:`ReservedAttributeName` when an attribute is named like
+        one of the keys written here - see that class for why refusing beats
+        either way of resolving it.
+        """
+        collisions = sorted(self.RESERVED_KEYS & set(self.attributes))
+        if collisions:
+            raise ReservedAttributeName(
+                f"{self.nodeId} ({self.featureType}): attribute name(s) "
+                + ", ".join(collisions)
+                + " are reserved for the node's own structure"
+            )
         result = {
             "nodeId": self.nodeId,
             "featureType": self.featureType,

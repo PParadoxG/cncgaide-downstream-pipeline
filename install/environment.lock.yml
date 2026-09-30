@@ -107,6 +107,11 @@ dependencies:
       - mpmath==1.3.0
       - networkx==3.4.2
       - numpy==1.26.4
+      # occwl 3.0.0, installed from its upstream repository rather than from an
+      # index.  On the captured machine it was an editable install of a clone
+      # whose HEAD was this commit; the line below is the non-editable form of
+      # the same tree, and is what environment.yml installs.
+      - git+https://github.com/AutodeskAILab/occwl@8b536ea8b3cf977dbafc1cf0a89eaa28fa996bba#egg=occwl
       - pillow==12.3.0
       - psutil==7.2.2
       - pyyaml==6.0.3

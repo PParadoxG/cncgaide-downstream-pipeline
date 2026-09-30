@@ -26,7 +26,7 @@ from __future__ import annotations
 from fnmatch import fnmatchcase
 
 from tbox import nx_v1 as source
-from features._shared.attributes import cad_face_ids
+from topology.faces import cad_face_ids
 from relations.nx._shared import axis, floor_faces, lateral_faces
 
 DERIVED_BY = "nx_kernel"
@@ -56,10 +56,15 @@ def _refusal(reason: str) -> dict:
 
 
 def _provenance(kernel, key: str) -> str | None:
-    try:
-        return kernel.provenance(key)
-    except Exception:
-        return None
+    """Which kernel route produced *key*'s value.
+
+    Not wrapped in a ``try``: ``KernelServices.provenance`` is a named seam
+    method whose refusal is ``None``, so an exception out of it is a bug in
+    the implementation, not a way of saying "unsupported" (node 26E finding
+    E-16).  Letting it out makes the part a named error with a traceback
+    instead of a ``derived`` entry that quietly lost its ``method``.
+    """
+    return kernel.provenance(key)
 
 
 def _floor_thickness(model, kernel, node, direction) -> dict:

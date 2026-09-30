@@ -29,13 +29,37 @@ from typing import Any, Mapping
 
 from ged.contract.representation import Representation, V5_1
 
-from .config import CostConfig
+from .config import CostConfig, TypeCost
 from .default import default_config
 from .fixed_cost import fixed_cost_upper_bound, make_fixed_node_cost
 
 
 DEFAULT_PRESET = "v0_default"
 CUSTOM_NAME = "custom"
+
+# ------------------------------------------------- type-cost ablations
+#
+# The eight weights say how much a kind of difference matters; the type cost
+# says what a class difference *is*, and neither line's answer is a weight.
+# Node 31 needs one internal baseline that takes that answer away - every
+# pair of different classes priced alike - so that the assertion set can be
+# run with and without it and the difference attributed to the ontology's
+# own structure (v5.1's hand-written matrix, nx_v1's Wu-Palmer tree) rather
+# than to the weights.  It is an *ablation*, not a candidate configuration:
+# no preset here changes what the default prices.
+FLAT_TYPES = "flat"
+FLAT_SAME_LEAF = 0.0
+FLAT_DIFFERENT_LEAF = 1.0
+
+
+def flat_type_cost(left: str, right: str) -> float:
+    """Every class is as far from every other class - and no further."""
+    return FLAT_SAME_LEAF if left == right else FLAT_DIFFERENT_LEAF
+
+
+#: Ablation name -> the substitution cost it installs.  Works on either
+#: representation: the function consults no table, which is the point.
+TYPE_COST_ABLATIONS: dict[str, TypeCost] = {FLAT_TYPES: flat_type_cost}
 
 # Canonical weight keys (the ``describe()`` names) -> the CostConfig field.
 WEIGHT_FIELDS: dict[str, str] = {
@@ -54,6 +78,15 @@ WEIGHT_KEYS: tuple[str, ...] = tuple(WEIGHT_FIELDS)
 PRESET_WEIGHTS: dict[str, dict[str, float]] = {
     "v0_default": {},
     "v0_no_local": {"W_LOCAL": 0.0},
+    "v0_flat_types": {},
+}
+
+# Presets that also install a type-cost ablation.  A preset absent from this
+# table prices with its representation's own table, so ``v0_default`` is byte
+# for byte the configuration it always was - same eight values, same empty
+# ablation name, same hash ``197bac0ed84d``.
+PRESET_TYPE_COST: dict[str, str] = {
+    "v0_flat_types": FLAT_TYPES,
 }
 
 # Display contract for the eight scalars: label, range, step, the one-line
@@ -115,11 +148,25 @@ def weights_of(config: CostConfig) -> dict[str, float]:
 
 
 def config_hash(config: CostConfig | Mapping[str, object]) -> str:
-    """First 12 hex digits of sha256 over the eight values (never the name)."""
-    weights = weights_of(config) if isinstance(config, CostConfig) else validate_weights(config)
+    """First 12 hex digits of sha256 over the eight values (never the name).
+
+    A config carrying a type-cost ablation adds that ablation's name to the
+    payload, because it is a different price list and its cached pairs must
+    not be served to the unablated configuration.  A config without one - and
+    a plain weight mapping, which can never name one - hashes exactly the
+    eight values, so every hash that existed before node 31 is unchanged.
+    """
+    if isinstance(config, CostConfig):
+        weights = weights_of(config)
+        ablation = config.type_cost_name
+    else:
+        weights = validate_weights(config)
+        ablation = ""
     if set(weights) != set(WEIGHT_KEYS):
         raise ValueError("config hash needs all eight weights")
-    canonical = {key: weights[key] for key in WEIGHT_KEYS}
+    canonical: dict[str, object] = {key: weights[key] for key in WEIGHT_KEYS}
+    if ablation:
+        canonical["TYPE_COST"] = ablation
     return hashlib.sha256(json.dumps(canonical, sort_keys=True).encode("utf-8")).hexdigest()[:12]
 
 
@@ -151,12 +198,21 @@ def get_config(name: str, *, representation: Representation | None = None) -> Co
         overrides = PRESET_WEIGHTS[name]
     except KeyError:
         raise KeyError(f"unknown cost preset {name!r}; known: {', '.join(PRESET_WEIGHTS)}") from None
-    return make_config(name, representation=representation, **overrides)
+    config = make_config(name, representation=representation, **overrides)
+    ablation = PRESET_TYPE_COST.get(name)
+    if ablation:
+        config = dataclasses.replace(
+            config, type_cost=TYPE_COST_ABLATIONS[ablation], type_cost_name=ablation)
+    return config
 
 
-def preset_name_for(weights: Mapping[str, float]) -> str | None:
-    """The preset whose values equal ``weights`` exactly, else None."""
-    wanted = config_hash(weights)
+def preset_name_for(config: CostConfig | Mapping[str, float]) -> str | None:
+    """The preset whose configuration equals this one exactly, else None.
+
+    A plain weight mapping can only ever match a preset that installs no
+    ablation, which is what a slider position should match.
+    """
+    wanted = config_hash(config)
     for name in PRESET_WEIGHTS:
         if config_hash(get_config(name)) == wanted:
             return name
@@ -165,13 +221,18 @@ def preset_name_for(weights: Mapping[str, float]) -> str | None:
 
 def describe_config(config: CostConfig, name: str | None = None) -> dict[str, Any]:
     weights = weights_of(config)
-    preset = preset_name_for(weights)
-    return {
+    preset = preset_name_for(config)
+    described: dict[str, Any] = {
         "name": name or preset or CUSTOM_NAME,
-        "hash": config_hash(weights),
+        "hash": config_hash(config),
         "weights": weights,
         "preset": preset is not None,
     }
+    # Only a config that is one says so, so the payload of every
+    # configuration that existed before node 31 is byte for byte unchanged.
+    if config.type_cost_name:
+        described["typeCostAblation"] = config.type_cost_name
+    return described
 
 
 def list_presets() -> list[dict[str, Any]]:
@@ -193,10 +254,13 @@ def resolve_config(
     overrides = validate_weights(weights)
     if not overrides:
         return base, describe_config(base, base.name)
-    effective = dict(weights_of(base))
-    effective.update(overrides)
-    preset = preset_name_for(effective)
-    config = make_config(preset or CUSTOM_NAME, base=base, **overrides)
+    # Build first, then ask what it is: an override on top of an ablated
+    # preset keeps the ablation, and the name has to be read off the whole
+    # configuration rather than off the eight weights alone.
+    config = make_config(CUSTOM_NAME, base=base, **overrides)
+    preset = preset_name_for(config)
+    if preset:
+        config = dataclasses.replace(config, name=preset)
     return config, describe_config(config, preset)
 
 

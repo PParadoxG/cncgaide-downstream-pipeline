@@ -7,10 +7,10 @@ display bookkeeping required by graph and OCC renderers.
 from __future__ import annotations
 
 import json
-import re
 from pathlib import Path
 from typing import Any
 
+from contract.face_ids import raw_cad_face_id
 from contract.partmodel import PartModel
 
 
@@ -75,7 +75,13 @@ def build_id_map(part_id: str, model: PartModel, nodes: list[Any]) -> dict[str, 
 
 
 def save_id_map(id_map: dict, path: str | Path) -> None:
-    Path(path).write_text(json.dumps(id_map, indent=2, ensure_ascii=False), encoding="utf-8")
+    """Compact, and with no newline of the platform's choosing (node 26 FP-1).
+
+    The digest parses this file before hashing it, so the layout is free;
+    the bytes are not.
+    """
+    Path(path).write_text(json.dumps(id_map, ensure_ascii=False, separators=(",", ":")),
+                          encoding="utf-8", newline="")
 
 
 def _parse_cad_ids(value: object) -> list[int]:
@@ -87,14 +93,20 @@ def _parse_cad_ids(value: object) -> list[int]:
 
 
 def _face_sort_key(face_id: str) -> tuple[int, str]:
-    match = re.fullmatch(r"face_(\d+)", face_id)
-    return (int(match.group(1)), face_id) if match else (10**9, face_id)
+    """Display order, so ``F002`` is ``face_2``.
+
+    The bucket for an id this line does not issue keeps its own number rather
+    than ``topology.faces.face_sort_key``'s ``inf``: F### assignment is a
+    published artifact, so its order stays where it was put.
+    """
+    number = raw_cad_face_id(face_id)
+    return (number, face_id) if number is not None else (10**9, face_id)
 
 
 def _cad_face_ids(face_id: str, merged_from: list[str]) -> list[int]:
     values: list[int] = []
     for candidate in [face_id, *merged_from]:
-        match = re.fullmatch(r"face_(\d+)", str(candidate))
-        if match:
-            values.append(int(match.group(1)))
+        number = raw_cad_face_id(candidate)
+        if number is not None:
+            values.append(number)
     return sorted(set(values))

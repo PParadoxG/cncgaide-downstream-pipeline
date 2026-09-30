@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="zh">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -667,7 +667,7 @@ const REL = [
  id: "SLOT_CLEARANCE", ab: "SC", label: "Slot clearance", col: "#2a9d8f", dir: "undirected",
  allow: (x, y) => pairOK("SLOT_CLEARANCE", x, y),
  gov: "the four Slot leaves",
- prop: "slotClearance (mm), courseAngle, courseParallel, transverseAngle",
+ prop: "slotClearance (mm)",
  def: "Minimum distance <b>between the opening boundaries</b> of two slots that share a host.",
  when: ["the two ends share at least one <code>LOCATED_ON</code> host owner", "a stable minimum distance can be obtained between the opening / cross-section boundaries of the two ends", "whether the course directions are parallel does not affect whether it holds"]
 }
@@ -757,7 +757,7 @@ const H = [
 
 {id:"H43", label:"H43 — Minimum through-cut corner radius", grade:"hard", scope:"single feature", stmt:"Keep the minimum concave internal corner radius of a through cut at or above 3 mm.", expr:"min_corner_radius >= 3.0", on:["ThroughCut"], rel:[], th:"t_throughcut_corner_radius = 3.0 mm"},
 
-{id:"H45", label:"H45 — Tool length-to-diameter capability", grade:"hard", scope:"single feature", stmt:"Keep the hole depth-to-diameter ratio within the maximum L/D reachable by the available tools.", expr:"derived_ratio_depth_to_diameter <= EXT.max_LD", on:["BlindHole"], rel:[], th:"—", ext:"tool magazine"},
+{id:"H45", label:"H45 — Tool length-to-diameter capability", grade:"hard", scope:"single feature", stmt:"Keep the hole depth-to-diameter ratio within the maximum L/D reachable by the available tools.", expr:"derived_ratio_depth_to_diameter <= EXT.max_length_to_diameter", on:["BlindHole"], rel:[], th:"—", ext:"tool magazine"},
 
 {id:"H46", label:"H46 — Minimum intersecting-hole angle", grade:"hard", scope:"feature pair", stmt:"Keep the crossing angle between two intersecting holes at or above 45 degrees.", expr:"INTERSECTS(A,B).crossingAngle >= 45", on:["BlindHole", "Counterbore", "Countersink", "StepBore", "ThroughHole"], rel:["INTERSECTS"], th:"t_crossing_angle = 45°"},
 

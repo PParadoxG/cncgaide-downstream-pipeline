@@ -37,7 +37,10 @@ from typing import Any
 
 from contract.partmodel import ConcavityType, CurveType, PartModel, SurfaceType
 
-from features._shared.closed_wall_band import EdgeIndex, build_edge_index, face_sort_key
+from features._shared.closed_wall_band import EdgeIndex, build_edge_index
+from topology.edges import edge_points
+from topology.faces import face_sort_key
+from topology.vectors import dot, unit_vector, valid_vector
 
 
 _ANALYTIC_SURFACES = {SurfaceType.PLANE, SurfaceType.CYLINDER}
@@ -102,6 +105,7 @@ class OpenSweepAnalysis:
 def discover_open_sweeps(
     model: PartModel,
     claimed_face_ids: set[str] | None = None,
+    edge_index: EdgeIndex | None = None,
 ) -> OpenSweepAnalysis:
     """Discover conservative open-sweep candidates in the unclaimed residue."""
     claimed = set(claimed_face_ids or ())
@@ -117,7 +121,7 @@ def discover_open_sweeps(
     if not available:
         return analysis
 
-    edge_index = build_edge_index(model)
+    edge_index = edge_index if edge_index is not None else build_edge_index(model)
     outer_sigs = {
         face_id: set(_face_boundary_sigs(model, edge_index, face_id))
         for face_id in available
@@ -520,7 +524,7 @@ def _analyze_single_cylinder(
     """
     face_ids = [face_id]
     face = model.faces[face_id]
-    axis = _unit(face.parameters.get("axis_direction"))
+    axis = unit_vector(face.parameters.get("axis_direction"))
 
     def reject(reason: str, detail: str = "") -> OpenSweepRejection:
         return OpenSweepRejection(
@@ -679,10 +683,10 @@ def _classify_face_boundary(
 def _face_supports_course(model: PartModel, face_id: str, direction: list[float]) -> bool:
     face = model.faces[face_id]
     if face.surface_type == SurfaceType.PLANE:
-        normal = _unit(face.parameters.get("normal"))
-        return normal is not None and abs(_dot(normal, direction)) <= _IN_PLANE_SIN
+        normal = unit_vector(face.parameters.get("normal"))
+        return normal is not None and abs(dot(normal, direction)) <= _IN_PLANE_SIN
     if face.surface_type == SurfaceType.CYLINDER:
-        axis = _unit(face.parameters.get("axis_direction"))
+        axis = unit_vector(face.parameters.get("axis_direction"))
         return axis is not None and _parallel(axis, direction)
     return False
 
@@ -825,16 +829,16 @@ def _face_course_extent(
     values: list[float] = []
     for sig in _face_boundary_sigs(model, index, face_id):
         edge = model.edges[index.representative(sig)]
-        for point in _edge_points(model, edge):
-            values.append(_dot(point, direction))
+        for point in edge_points(model, edge):
+            values.append(dot(point, direction))
     if not values:
         face = model.faces[face_id]
         bbox = face.bbox
         if isinstance(bbox, dict):
             lower, upper = bbox.get("min"), bbox.get("max")
-            if _vector(lower) and _vector(upper):
+            if valid_vector(lower) and valid_vector(upper):
                 values = [
-                    _dot([upper[i] if mask & (1 << i) else lower[i] for i in range(3)], direction)
+                    dot([upper[i] if mask & (1 << i) else lower[i] for i in range(3)], direction)
                     for mask in range(8)
                 ]
     return (min(values), max(values)) if values else None
@@ -847,7 +851,7 @@ def _edge_projection_extent(
     direction: list[float],
 ) -> tuple[float, float] | None:
     edge = model.edges[index.representative(sig)]
-    values = [_dot(point, direction) for point in _edge_points(model, edge)]
+    values = [dot(point, direction) for point in edge_points(model, edge)]
     return (min(values), max(values)) if values else None
 
 
@@ -867,29 +871,18 @@ def _edge_direction(model: PartModel, index: EdgeIndex, sig: tuple) -> list[floa
     edge = model.edges[index.representative(sig)]
     if edge.curve_type != CurveType.LINE:
         return None
-    direction = _unit(edge.parameters.get("direction"))
+    direction = unit_vector(edge.parameters.get("direction"))
     if direction is not None:
         return direction
-    points = _edge_points(model, edge)
+    points = edge_points(model, edge)
     if len(points) >= 2:
         best = max(
             ((math.dist(left, right), left, right) for left in points for right in points),
             key=lambda item: item[0],
         )
         if best[0] > _MIN_COURSE_LENGTH:
-            return _unit([best[2][axis] - best[1][axis] for axis in range(3)])
+            return unit_vector([best[2][axis] - best[1][axis] for axis in range(3)])
     return None
-
-
-def _edge_points(model: PartModel, edge) -> list[list[float]]:
-    points = [list(point) for point in (getattr(edge, "sample_points", None) or []) if _vector(point)]
-    if points:
-        return points
-    return [
-        list(model.vertices[vertex_id].coordinates)
-        for vertex_id in (getattr(edge, "vertex_ids", None) or [])
-        if vertex_id in model.vertices
-    ]
 
 
 def _components(graph: dict[str, set[str]]) -> list[set[str]]:
@@ -941,11 +934,11 @@ def _length_tolerance(length: float) -> float:
 
 
 def _parallel(left: list[float], right: list[float]) -> bool:
-    return abs(_dot(left, right)) >= _PARALLEL_COS
+    return abs(dot(left, right)) >= _PARALLEL_COS
 
 
 def _canonical_axis(value: list[float]) -> list[float]:
-    axis = _unit(value) or [1.0, 0.0, 0.0]
+    axis = unit_vector(value) or [1.0, 0.0, 0.0]
     for component in axis:
         if abs(component) <= 1.0e-12:
             continue
@@ -953,24 +946,3 @@ def _canonical_axis(value: list[float]) -> list[float]:
             axis = [-item for item in axis]
         break
     return axis
-
-
-def _unit(value: object) -> list[float] | None:
-    if not _vector(value):
-        return None
-    magnitude = math.sqrt(sum(float(item) ** 2 for item in value))
-    if magnitude <= 1.0e-12:
-        return None
-    return [float(item) / magnitude for item in value]
-
-
-def _vector(value: object) -> bool:
-    return (
-        isinstance(value, (list, tuple))
-        and len(value) == 3
-        and all(isinstance(item, (int, float)) and math.isfinite(float(item)) for item in value)
-    )
-
-
-def _dot(left, right) -> float:
-    return sum(float(left[index]) * float(right[index]) for index in range(3))

@@ -3,7 +3,7 @@
 
    Order: tokens → base elements → shared components → one block per page.
    Rules of the sheet (see the project instructions, "Visualization"):
-     - every font-size references one of the four --fs-* steps;
+     - every font-size references one of the --fs-* steps;
      - monospace only for identifiers (part / node ids, H numbers, hashes,
        fingerprints); numbers in columns are sans + tabular figures;
      - type colours in lists are tinted (.chip-tint / .type-chip.on), solid
@@ -115,14 +115,17 @@
 :root {
   --sans: "Inter", "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
   --mono: "JetBrains Mono", "Cascadia Code", Consolas, ui-monospace, monospace;
-  /* The four type sizes.  Nothing else is used anywhere on the pages.  The
-     range is deliberately wide: at 11/12.5/14/22 almost every glyph on screen
-     sat in the bottom two steps and the eye had nowhere to rest.  Levels in
-     between these four are made with weight and colour, not with more sizes. */
+  /* The type sizes.  Nothing else is used anywhere on the pages.  The range
+     is deliberately wide: at 11/12.5/14/22 almost every glyph on screen sat in
+     the bottom two steps and the eye had nowhere to rest.  Levels in between
+     are made with weight and colour, not with more sizes.  --fs-hero is the
+     one figure a reader comes to the statistics view for; it is a step of its
+     own rather than a literal, which is what it was until node 27. */
   --fs-meta: 11px;
   --fs-body: 13px;
   --fs-title: 16px;
   --fs-display: 28px;
+  --fs-hero: 40px;
   /* 8 px rhythm. */
   --sp-1: 4px;
   --sp-2: 8px;
@@ -968,17 +971,11 @@ button.heur-sq:hover { transform: scale(1.25); }
 
 /* --------------------------------------------------- heuristic statistics */
 
-/* Wrapper the launcher mounts the statistics into so a line notice can
-   sit above them; display: contents keeps the stats panels direct flex
-   participants of .stats-body. */
+/* Wrapper the launcher mounts the statistics into.  It once held a line
+   notice above them, which node 20'b removed; the wrapper stayed because
+   display: contents keeps the stats panels direct flex participants of
+   .stats-body, and the rule below depends on that. */
 .stats-root { display: contents; }
-.line-note {
-  padding: var(--sp-2) var(--sp-3);
-  border-radius: var(--r-md);
-  background: var(--accent-soft);
-  color: var(--text-2);
-  font-size: var(--fs-body);
-}
 
 .stats-body {
   flex: 1;
@@ -1017,7 +1014,7 @@ button.heur-sq:hover { transform: scale(1.25); }
 }
 .stats-hero .hero-figure { flex: 0 0 auto; }
 .stats-hero .hero-figure .value {
-  font-size: 40px;
+  font-size: var(--fs-hero);
   font-weight: 600;
   letter-spacing: -.02em;
   line-height: 1;
@@ -1027,7 +1024,6 @@ button.heur-sq:hover { transform: scale(1.25); }
 .stats-hero .hero-split { flex: 1 1 260px; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
 .stats-hero .hero-split .sub { font-size: var(--fs-meta); color: var(--text-3); margin: 0; }
 
-.stats-cards { display: flex; flex-wrap: wrap; gap: var(--sp-3); }
 .stats-card {
   flex: 1 1 150px;
   padding: var(--sp-3) var(--sp-4);
@@ -1037,8 +1033,6 @@ button.heur-sq:hover { transform: scale(1.25); }
   box-shadow: var(--shadow);
 }
 .stats-card .value { font-size: var(--fs-display); font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1.15; color: var(--text); }
-.stats-card .value.fail { color: var(--not-met-ink); }
-.stats-card .value.neval { color: var(--ne-ink); }
 .stats-card .value.pass { color: var(--met-ink); }
 .stats-card .label { font-size: var(--fs-meta); color: var(--text-3); margin-top: 2px; }
 .stats-card .sub { font-size: var(--fs-meta); color: var(--text-3); margin-top: 5px; }
@@ -1210,6 +1204,15 @@ button.heur-sq:hover { transform: scale(1.25); }
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* Something the run itself said about the run: an index written to a schema
+   this page does not know, or a consistency check the sync reported failing.
+   Rare by construction, so it is coloured (token ④: status colours only in
+   the exceptional case) and the detail is in the tooltip. */
+.foot-note {
+  margin-left: var(--sp-2);
+  color: var(--not-met-ink);
 }
 
 /* The column scrolls; the panels inside it are sized by their content.  When
@@ -1437,7 +1440,9 @@ button.heur-sq:hover { transform: scale(1.25); }
 .job-bar .job-note { color: var(--accent); }
 .job-bar .job-note.error { color: var(--ne-ink); }
 
-/* Part page: one line when the part on screen is not what the store would build today. */
+/* One line when what is on screen is not what the store would build today:
+   the part page's store banner, and the "run was rebuilt" banner all three
+   pages share (web/runwatch.js). */
 .banner {
   display: flex;
   align-items: center;

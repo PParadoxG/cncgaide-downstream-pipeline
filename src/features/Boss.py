@@ -121,6 +121,7 @@ from features._shared.band_frame import (
     rectangular_shape_width,
 )
 from features._shared.closed_wall_band import (
+    EdgeIndex,
     WallBandAnalysis,
     WallBandCandidate,
     build_edge_index,
@@ -155,10 +156,13 @@ def recognize_and_build(
     transition: TransitionEvidence,
     kernel: Any | None = None,
     start_index: int = 1,
+    edge_index: EdgeIndex | None = None,
 ) -> tuple[list[FeatureNode], set[str], dict[str, Any]]:
     """Register a Boss leaf class for every CONCAVE-in / CONVEX-out band."""
-    claimed = claimed_face_ids if claimed_face_ids is not None else set()
-    index = build_edge_index(model)
+    claimed = set(claimed_face_ids or ())
+    # The orchestrator builds one index per part and hands it down; building
+    # our own is the standalone-call path, not the production one.
+    index = edge_index if edge_index is not None else build_edge_index(model)
     classifier = SolidPointClassifier(kernel)
 
     nodes: list[FeatureNode] = []
@@ -194,7 +198,7 @@ def recognize_and_build(
             rejected.append(_rejection(band, "duplicate_face_set", ""))
             continue
 
-        shape = _classify(model, index, band, kernel)
+        shape = _classify(model, index, band)
         if shape.feature_type is None:
             # A boss we cannot type is reported, not invented: the ontology's
             # Boss partition is by footprint, so an unmeasurable footprint
@@ -299,7 +303,7 @@ class Shape:
         }
 
 
-def _classify(model: PartModel, edge_index, band: WallBandCandidate, kernel) -> Shape:
+def _classify(model: PartModel, edge_index, band: WallBandCandidate) -> Shape:
     """Name the ontology leaf class, or explain why the footprint names none."""
     frame = build_band_frame(model, edge_index, band)
     if not frame.resolved:
@@ -407,7 +411,7 @@ def _build_node(
     feature_type = shape.feature_type
     fields = _ATTRIBUTE_FIELDS[feature_type]
 
-    height, height_level, height_reason = _height(model, edge_index, frame, band, shape)
+    height, height_level, height_reason = _height(model, edge_index, frame, band)
     centre = footprint_centroid(frame, shape.base_loop)
     centre_reason = "the footprint rim encloses no measurable area, so it has no centroid"
     clearance_diagnostics: dict[str, Any] = {}
@@ -485,7 +489,7 @@ def _build_node(
             "featureFrame": frame.to_dict() if frame else None,
             "leafClassification": shape.to_dict(),
             "heightMeasurement": height_level.to_dict() if height_level else None,
-            "topAnalysis": _top_analysis(model, kernel, frame, top),
+            "topAnalysis": _top_analysis(model, frame, top),
             "clearance": clearance_diagnostics,
             "incomingEndpoint": incoming.to_dict(),
             "outgoingEndpoint": outgoing.to_dict(),
@@ -504,7 +508,6 @@ def _height(
     edge_index,
     frame: BandFrame,
     band: WallBandCandidate,
-    shape: Shape,
 ) -> tuple[float | None, AxialLevel | None, str]:
     """Axial rise from the footprint plane to the top rim.
 
@@ -529,7 +532,7 @@ def _height(
     return rounded_scalar(level.level), level, ""
 
 
-def _top_analysis(model: PartModel, kernel, frame: BandFrame, top: list[str]) -> dict[str, Any]:
+def _top_analysis(model: PartModel, frame: BandFrame, top: list[str]) -> dict[str, Any]:
     """Does the claimed top region actually face away from the support?
 
     Recorded for audit only.  Nothing about a Boss is derived from the top

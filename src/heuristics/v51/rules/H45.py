@@ -18,7 +18,11 @@ class H45(FeatureRule):
 
     h_id = "H45"
     USES_ATTRIBUTES = ("derived_ratio_depth_to_diameter",)
-    EXTERNAL_INPUT = "max_LD"
+    # One spelling for both dialects.  nx H45 has always used this name, and
+    # v5.1's own condition line in heuristics.yaml already reads
+    # ``tool_magazine(machine).max_length_to_diameter`` - only the page's
+    # rendering string and this constant said ``max_LD``.
+    EXTERNAL_INPUT = "max_length_to_diameter"
 
     def evaluate_feature(self, node, context):
         limit = context.external_inputs.get(self.EXTERNAL_INPUT)
@@ -28,5 +32,5 @@ class H45(FeatureRule):
             context.attribute(node, "derived_ratio_depth_to_diameter"),
             limit,
             "derived_ratio_depth_to_diameter",
-            "EXT.max_LD",
+            f"EXT.{self.EXTERNAL_INPUT}",
         )

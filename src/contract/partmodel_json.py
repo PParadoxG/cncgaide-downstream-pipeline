@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import dataclasses
 import json
+import math
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
@@ -20,15 +21,12 @@ from typing import Any, get_args, get_origin, get_type_hints
 
 from contract.partmodel import (
     AdjacencyInfo,
-    ConcavityType,
-    CurveType,
     EdgeData,
     FaceData,
     LoopData,
     PartMetadata,
     PartModel,
     ShellData,
-    SurfaceType,
     VertexData,
 )
 
@@ -43,13 +41,6 @@ _TYPE_REGISTRY: dict[str, type] = {
     "AdjacencyInfo":   AdjacencyInfo,
     "LoopData":        LoopData,
 }
-
-_ENUM_TYPES: dict[str, type[Enum]] = {
-    "SurfaceType":   SurfaceType,
-    "CurveType":     CurveType,
-    "ConcavityType": ConcavityType,
-}
-
 
 # ---------------------------------------------------------------------------
 # Serialize
@@ -86,9 +77,64 @@ def _dataclass_to_dict(obj: Any) -> dict:
     return result
 
 
+class NonFiniteNumber(ValueError):
+    """The model carries a number JSON has no way to write.
+
+    ``json.dumps`` defaults to ``allow_nan=True`` and emits bare ``NaN`` /
+    ``Infinity``, which Python reads back and nothing else does - and a
+    ``partmodel.json`` whose whole point is being readable without a kernel
+    would then be readable only in Python.  Refusing is the seam's own rule:
+    a quantity that could not be measured is ``None`` with a named reason, not
+    a float that means "no answer".
+    """
+
+
+def _non_finite_paths(payload: Any, prefix: str = "") -> list[str]:
+    """Where the values ``json.dumps`` refused actually live.
+
+    Walked only on the error path, so the check costs nothing in the normal
+    case - and the caller gets ``faces.face_12.area`` rather than a message
+    that only says some float somewhere was out of range.
+    """
+    found: list[str] = []
+    if isinstance(payload, dict):
+        for key, value in payload.items():
+            found += _non_finite_paths(value, f"{prefix}.{key}" if prefix else str(key))
+    elif isinstance(payload, (list, tuple)):
+        for index, value in enumerate(payload):
+            found += _non_finite_paths(value, f"{prefix}[{index}]")
+    elif isinstance(payload, float) and not math.isfinite(payload):
+        found.append(f"{prefix or '<root>'}={payload!r}")
+    return found
+
+
+# No indent and no spaces after the separators.  ``partmodel.json`` is the
+# largest artifact by a wide margin (17.1 MiB over the 18 line folders of the
+# nine-part corpus) and about 40% of it was indentation; the digest cannot see
+# the difference, because ``store.stamps._content_hash`` parses a ``.json``
+# artifact, strips the volatile keys and re-serializes it canonically before
+# hashing - it asks whether the data moved, not how it was laid out.  Read it
+# with ``python -m json.tool`` or the viewer; nothing reads it by eye.
+_COMPACT = (",", ":")
+
+
 def to_json(model: PartModel) -> str:
-    """Serialize *model* to a JSON string."""
-    return json.dumps(_dataclass_to_dict(model), indent=2, ensure_ascii=False)
+    """Serialize *model* to a JSON string.
+
+    Raises :class:`NonFiniteNumber` (a ``ValueError``) rather than writing a
+    file only Python can read; see that class for why.
+    """
+    payload = _dataclass_to_dict(model)
+    try:
+        return json.dumps(payload, ensure_ascii=False, allow_nan=False,
+                          separators=_COMPACT)
+    except ValueError as error:
+        where = _non_finite_paths(payload)
+        raise NonFiniteNumber(
+            "the PartModel carries value(s) JSON cannot represent: "
+            + ("; ".join(where[:8]) + ("; ..." if len(where) > 8 else "")
+               if where else str(error))
+        ) from error
 
 
 # ---------------------------------------------------------------------------
@@ -142,11 +188,10 @@ def _dict_to_dataclass(d: dict) -> Any:
     """Reconstruct a dataclass instance from a ``__type__``-tagged dict."""
     type_name = d.pop("__type__")
 
-    # Enum types
-    if type_name in _ENUM_TYPES:
-        # Only one value remains (the enum .value string)
-        return _ENUM_TYPES[type_name](list(d.values())[0])
-
+    # No enum branch: ``_serialize_value`` turns every enum into its
+    # ``.value`` string, so a ``__type__``-tagged enum dict is never
+    # produced and the branch that read one was unreachable.  Pinned by
+    # tests/test_node26_a.py::test_enums_are_serialized_as_plain_strings.
     cls = _TYPE_REGISTRY.get(type_name)
     if cls is None:
         raise ValueError(f"Unknown type '{type_name}' in serialized data")
@@ -177,9 +222,16 @@ def from_json(json_str: str) -> PartModel:
 # ---------------------------------------------------------------------------
 
 def save_json(model: PartModel, filepath: str) -> None:
-    """Serialize *model* to a JSON file at *filepath*."""
+    """Serialize *model* to a JSON file at *filepath*.
+
+    ``newline=""`` because the default translates every ``\\n`` into
+    ``\\r\\n`` on Windows while the store's own writer
+    (``store.records.atomic_write_text``, which encodes to bytes first)
+    does not - so one part's folder used to hold two line-ending
+    conventions.  LF is the one that comes out the same on either platform.
+    """
     json_str = to_json(model)
-    Path(filepath).write_text(json_str, encoding="utf-8")
+    Path(filepath).write_text(json_str, encoding="utf-8", newline="")
 
 
 # ---------------------------------------------------------------------------

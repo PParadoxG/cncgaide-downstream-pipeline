@@ -24,7 +24,7 @@ def recognize_and_build(
     kernel: Any | None = None,
     start_index: int = 1,
 ) -> tuple[list[FeatureNode], set[str], dict[str, Any]]:
-    claimed = claimed_face_ids if claimed_face_ids is not None else set()
+    claimed = set(claimed_face_ids or ())
     transition = transition or build_transition_evidence(model, evidence_document or {})
     nodes: list[FeatureNode] = []
     rejected: list[dict[str, Any]] = []

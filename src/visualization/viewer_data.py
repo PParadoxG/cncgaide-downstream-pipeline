@@ -171,7 +171,7 @@ def build_mesh(kernel, part_paths: dict[str, Path]) -> dict:
         "faces": face_records,
         "emptyCadFaceIds": empty_faces,
     }
-    part_paths["mesh_index"].write_text(json.dumps(header), encoding="utf-8")
+    part_paths["mesh_index"].write_text(json.dumps(header), encoding="utf-8", newline="")
     return header
 
 
@@ -210,13 +210,15 @@ def _diagnostics_digest(node: dict) -> dict:
     return digest
 
 
-def _edge_type_color(palette: dict, edge_type: str, fallback_index: int) -> str:
+def _edge_type_color(palette: dict, edge_type: str) -> str:
     """Palette colour when the edge type has one, otherwise a stable hue.
 
     A relation registered after this file was written must still be legible;
     falling back to one shared grey would make two new relations
     indistinguishable.  The hue comes from the type name, so it is stable
-    across runs without needing a palette entry.
+    across runs without needing a palette entry - and, since node 26 F-16,
+    without a ``fallback_index`` parameter that three call sites computed and
+    nothing ever read.
     """
     declared = (palette.get("edges") or {}).get(edge_type)
     if declared:
@@ -299,10 +301,10 @@ def build_view(
         {
             "edgeType": edge_type,
             "count": count,
-            "color": _edge_type_color(palette, edge_type, index),
+            "color": _edge_type_color(palette, edge_type),
             "defaultVisible": edge_type in DEFAULT_VISIBLE_EDGE_TYPES,
         }
-        for index, (edge_type, count) in enumerate(sorted(edge_type_counts.items()))
+        for edge_type, count in sorted(edge_type_counts.items())
     ]
 
     # Raw CAD face table.  Every tessellated face gets a row, including the
@@ -331,7 +333,6 @@ def build_view(
         "schemaVersion": "v8.viewer_view.v1",
         "partId": part_id,
         "sourceStep": graph_view.get("sourceStep"),
-        "outputTag": graph_view.get("outputTag"),
         "nodes": nodes,
         "edges": edges,
         "relationTypes": relation_types,
@@ -463,7 +464,7 @@ def build_part_viewer_artifacts(
                       hidden_feature_types=hidden_feature_types,
                       feature_labels=feature_labels, not_evaluated=not_evaluated,
                       used_attributes=used_attributes)
-    part_paths["viewer_view"].write_text(json.dumps(view), encoding="utf-8")
+    part_paths["viewer_view"].write_text(json.dumps(view), encoding="utf-8", newline="")
 
     return {
         "partId": part_id,

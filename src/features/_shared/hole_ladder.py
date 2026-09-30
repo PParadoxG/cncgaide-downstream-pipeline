@@ -27,7 +27,6 @@ made of them.
 
 from __future__ import annotations
 
-import math
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -42,12 +41,12 @@ from features._shared.compound_resolution import (
     _cone_circles,
     _complete_cylindrical_section,
     _direct_rim_junction,
-    _face_interval,
     _line_distance,
     _positive,
     _validate_counterbore_shoulder,
 )
-from features._shared.hole_topology import unit_vector, valid_vector
+from topology.faces import FaceIntervalTable, face_sort_key
+from topology.vectors import unit_vector, valid_vector
 
 
 @dataclass(frozen=True)
@@ -229,8 +228,12 @@ class LadderAnalysis:
                 if not run.valid or run.size != 1 or cone.end != "entry":
                     released.add(cone.faceId)
             if not run.valid:
-                # An unproven run keeps whatever the low-level layer made of it, transitions
-                # included; nothing here has the standing to release them.
+                # Only the shoulder transitions are held back here.  An unproven run has no
+                # proven segment chain, so nothing in it has the standing to say that a
+                # ``segment.transitionFaceId`` really is a released shoulder cone.  Its end
+                # cones are a different question and were already released by the loop above:
+                # the low-level hole modules never claim a cone, so leaving one out here would
+                # leave it owned by nobody at all.
                 continue
             for segment in run.segments:
                 if segment.transitionKind == "cone" and segment.transitionFaceId:
@@ -252,9 +255,11 @@ class LadderAnalysis:
 
 # ---------------------------------------------------------------- discovery
 
-def discover_hole_ladders(model: PartModel) -> LadderAnalysis:
+def discover_hole_ladders(model: PartModel,
+                          intervals: FaceIntervalTable | None = None) -> LadderAnalysis:
     """Find every coaxial cylinder run in the part.  Owns nothing, decides nothing."""
     analysis = LadderAnalysis()
+    intervals = intervals if intervals is not None else FaceIntervalTable(model)
     cylinders = [
         face_id for face_id, face in model.faces.items()
         if face.surface_type == SurfaceType.CYLINDER and _positive(face.parameters.get("radius")) is not None
@@ -262,7 +267,7 @@ def discover_hole_ladders(model: PartModel) -> LadderAnalysis:
         and valid_vector(face.parameters.get("axis_location"))
     ]
     for group in _group_by_axis_line(model, cylinders):
-        for run in _runs_in_group(model, group, analysis.rejected):
+        for run in _runs_in_group(model, group, analysis.rejected, intervals):
             analysis.runs.append(run)
             for segment in run.segments:
                 analysis._by_face[segment.faceId] = run
@@ -272,7 +277,7 @@ def discover_hole_ladders(model: PartModel) -> LadderAnalysis:
 def _group_by_axis_line(model: PartModel, cylinders: list[str]) -> list[list[str]]:
     """Partition cylinders into sets sharing one infinite axis line."""
     groups: list[list[str]] = []
-    for face_id in sorted(cylinders, key=_face_sort_key):
+    for face_id in sorted(cylinders, key=face_sort_key):
         face = model.faces[face_id]
         axis = unit_vector(face.parameters.get("axis_direction"))
         origin = face.parameters.get("axis_location")
@@ -289,7 +294,8 @@ def _group_by_axis_line(model: PartModel, cylinders: list[str]) -> list[list[str
     return [group for group in groups if group]
 
 
-def _runs_in_group(model: PartModel, group: list[str], rejected: list[dict[str, Any]]) -> list[HoleRun]:
+def _runs_in_group(model: PartModel, group: list[str], rejected: list[dict[str, Any]],
+                   intervals: FaceIntervalTable) -> list[HoleRun]:
     """Chain one coaxial group into maximal runs and orient each by the axiom."""
     reference = model.faces[group[0]]
     axis = unit_vector(reference.parameters.get("axis_direction"))
@@ -298,7 +304,7 @@ def _runs_in_group(model: PartModel, group: list[str], rejected: list[dict[str, 
     members: dict[str, dict[str, Any]] = {}
     for face_id in group:
         face = model.faces[face_id]
-        interval = _face_interval(model, face, axis)
+        interval = intervals.interval(face, axis)
         radius = _positive(face.parameters.get("radius"))
         if interval is None or radius is None or abs(interval[1] - interval[0]) <= _AXIAL_TOL:
             continue
@@ -310,7 +316,7 @@ def _runs_in_group(model: PartModel, group: list[str], rejected: list[dict[str, 
     # through a *proven* internal annular shoulder.  Touching intervals alone are not enough;
     # a radius step with no real shoulder face is not a bore step.
     links: dict[str, dict[str, dict[str, Any]]] = {face_id: {} for face_id in members}
-    ordered = sorted(members, key=_face_sort_key)
+    ordered = sorted(members, key=face_sort_key)
     for index, left_id in enumerate(ordered):
         for right_id in ordered[index + 1:]:
             join = _transition_between(model, left_id, right_id, members, axis)
@@ -328,13 +334,13 @@ def _runs_in_group(model: PartModel, group: list[str], rejected: list[dict[str, 
         seen |= component
         if len(component) == 1:
             face_id = next(iter(component))
-            runs.append(_single_segment_run(model, face_id, members[face_id], axis, origin))
+            runs.append(_single_segment_run(face_id, members[face_id], axis, origin))
             continue
-        run = _chain_run(model, component, links, members, axis, origin, rejected)
+        run = _chain_run(component, links, members, axis, origin, rejected)
         if run is not None:
             runs.append(run)
     for run in runs:
-        _attach_cones(model, run, members)
+        _attach_cones(model, run)
     return runs
 
 
@@ -440,7 +446,7 @@ def _component(start: str, links: dict[str, dict[str, dict]]) -> set[str]:
     return out
 
 
-def _single_segment_run(model, face_id: str, member: dict, axis: list[float], origin: list[float]) -> HoleRun:
+def _single_segment_run(face_id: str, member: dict, axis: list[float], origin: list[float]) -> HoleRun:
     """A lone cylinder is a run of one; its entry end is decided when a cone is attached."""
     interval = member["interval"]
     return HoleRun(
@@ -450,7 +456,7 @@ def _single_segment_run(model, face_id: str, member: dict, axis: list[float], or
     )
 
 
-def _chain_run(model, component: set[str], links, members, axis, origin,
+def _chain_run(component: set[str], links, members, axis, origin,
                rejected: list[dict[str, Any]]) -> HoleRun | None:
     """Order a connected component into a path and orient it by the widest end."""
     degrees = {face_id: len(links[face_id]) for face_id in component}
@@ -459,13 +465,13 @@ def _chain_run(model, component: set[str], links, members, axis, origin,
         # A branch means one cylinder steps to two different cylinders at the same end, which
         # is not a one-dimensional bore.  Nothing here can be ordered; say so and move on.
         rejected.append({
-            "faceIds": sorted(component, key=_face_sort_key),
+            "faceIds": sorted(component, key=face_sort_key),
             "reason": "coaxial_cylinder_group_is_not_a_simple_chain",
-            "degrees": {face_id: degrees[face_id] for face_id in sorted(component, key=_face_sort_key)},
+            "degrees": {face_id: degrees[face_id] for face_id in sorted(component, key=face_sort_key)},
         })
         return None
 
-    path = [sorted(ends, key=_face_sort_key)[0]]
+    path = [sorted(ends, key=face_sort_key)[0]]
     while len(path) < len(component):
         current = path[-1]
         nxt = [face_id for face_id in links[current] if face_id not in path]
@@ -473,7 +479,7 @@ def _chain_run(model, component: set[str], links, members, axis, origin,
             break
         path.append(nxt[0])
     if len(path) != len(component):
-        rejected.append({"faceIds": sorted(component, key=_face_sort_key),
+        rejected.append({"faceIds": sorted(component, key=face_sort_key),
                          "reason": "coaxial_cylinder_chain_could_not_be_ordered"})
         return None
 
@@ -539,7 +545,7 @@ def _other_end(interval: tuple[float, float], taken: float | None) -> float:
     return interval[0] if abs(interval[1] - taken) <= tolerance else interval[1]
 
 
-def _attach_cones(model: PartModel, run: HoleRun, members: dict) -> None:
+def _attach_cones(model: PartModel, run: HoleRun) -> None:
     """Find the cones sitting on the two ends of a run and label which end each is on."""
     ends = _free_ends(run)
     if run.size == 1:
@@ -646,12 +652,6 @@ def _cone_at(model: PartModel, run: HoleRun, segment: LadderSegment, coordinate:
         if best is None or candidate.largeRadius > best.largeRadius:
             best = candidate
     return best
-
-
-def _face_sort_key(face_id: str) -> tuple[int, str]:
-    text = str(face_id)
-    digits = "".join(ch for ch in text if ch.isdigit())
-    return (int(digits) if digits else math.inf, text)
 
 
 def analysis_diagnostics(analysis: LadderAnalysis) -> dict[str, Any]:

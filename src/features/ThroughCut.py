@@ -102,6 +102,7 @@ from features._shared.band_frame import (
     rim_points,
 )
 from features._shared.closed_wall_band import (
+    EdgeIndex,
     WallBandAnalysis,
     WallBandCandidate,
     build_edge_index,
@@ -141,10 +142,13 @@ def recognize_and_build(
     transition: TransitionEvidence,
     kernel: Any | None = None,
     start_index: int = 1,
+    edge_index: EdgeIndex | None = None,
 ) -> tuple[list[FeatureNode], set[str], dict[str, Any]]:
     """Register a ThroughCut for every band that opens at both of its ends."""
-    claimed = claimed_face_ids if claimed_face_ids is not None else set()
-    index = build_edge_index(model)
+    claimed = set(claimed_face_ids or ())
+    # The orchestrator builds one index per part and hands it down; building
+    # our own is the standalone-call path, not the production one.
+    index = edge_index if edge_index is not None else build_edge_index(model)
     classifier = SolidPointClassifier(kernel)
 
     nodes: list[FeatureNode] = []
@@ -181,7 +185,7 @@ def recognize_and_build(
             rejected.append(_rejection(band, "exit_end_is_not_an_opening", exit_.reason))
             continue
 
-        geometry = _geometry(model, index, band, kernel)
+        geometry = _geometry(model, index, band)
         if geometry.status == _CIRCULAR:
             rejected.append(_rejection(band, "circular_footprint_belongs_to_the_hole_family", geometry.reason))
             continue
@@ -321,7 +325,7 @@ class _Geometry:
     exit_level: AxialLevel | None = None
 
 
-def _geometry(model: PartModel, index, band: WallBandCandidate, kernel) -> _Geometry:
+def _geometry(model: PartModel, index, band: WallBandCandidate) -> _Geometry:
     """Recover the frame and footprint, or say exactly what was missing."""
     frame = build_band_frame(model, index, band)
     if not frame.resolved:

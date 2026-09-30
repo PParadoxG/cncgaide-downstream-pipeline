@@ -33,7 +33,7 @@ const LABEL = {
 const SHORT = { PASS: 'met', FAIL: 'not met', NOT_EVALUABLE: 'n/e' };
 const MAX_DETAIL_ROWS = 40;
 /** A verdict blocked by an input this pipeline neither owns nor can compute. */
-export function isExternalGap(record) {
+function isExternalGap(record) {
   return (record.evidence || {}).blocked === 'externalInputMissing';
 }
 
@@ -64,6 +64,9 @@ export function createHeuristicsPanel(root, store, callbacks) {
     model = nextModel;
     scrolledTo = null;
     signature = null;
+    // No part open: the verdicts of the previous one must not stay on screen
+    // under the new part's name.
+    if (!model) { scope.textContent = ''; body.innerHTML = ''; return; }
     render(store.get(), true);
   }
 
@@ -157,7 +160,12 @@ export function createHeuristicsPanel(root, store, callbacks) {
     // Deep link from the statistics view: bring the requested row into sight
     // once, without fighting the reviewer's scrolling afterwards.
     if (state.heuristicFocus && scrolledTo !== state.heuristicFocus) {
-      const target = body.querySelector(`[data-h="${state.heuristicFocus}"]`);
+      // The focus arrives from `?h=` in a link someone was handed, so it is
+      // an arbitrary string, not a rule id.  Escaped, a malformed one simply
+      // matches nothing; pasted in raw it makes querySelector throw, and the
+      // throw travels back out through store.update() into whoever asked for
+      // the render - which took the whole page down, not just this panel.
+      const target = body.querySelector(`[data-h="${CSS.escape(state.heuristicFocus)}"]`);
       if (target) {
         target.scrollIntoView({ block: 'nearest' });
         scrolledTo = state.heuristicFocus;

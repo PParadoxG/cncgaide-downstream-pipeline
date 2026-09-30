@@ -7,6 +7,7 @@ from pathlib import Path
 
 from OCC.Core.Bnd import Bnd_Box
 from OCC.Core.BRepBndLib import brepbndlib
+from OCC.Core.IntCurvesFace import IntCurvesFace_ShapeIntersector
 from OCC.Core.TopoDS import TopoDS_Face, TopoDS_Shape
 
 from occline.parse.reader import load_step
@@ -24,6 +25,7 @@ class OccGeometryContext:
         for index, face in enumerate(self.cad_faces):
             self._hash_to_indices.setdefault(hash(face), []).append(index)
         self.max_ray_distance = _shape_ray_distance(shape)
+        self._intersectors: dict[float, IntCurvesFace_ShapeIntersector] = {}
 
     @classmethod
     def from_step(cls, source_step: str | Path) -> "OccGeometryContext":
@@ -38,6 +40,25 @@ class OccGeometryContext:
         if not isinstance(cad_face_id, int) or cad_face_id < 0 or cad_face_id >= len(self.cad_faces):
             return None
         return self.cad_faces[cad_face_id]
+
+    def ray_intersector(self, tolerance: float) -> IntCurvesFace_ShapeIntersector:
+        """A loaded ray intersector for this shape, built once per tolerance.
+
+        ``Load`` builds a bounding-box tree over the whole shape, and the ray
+        casts used to rebuild it on every call - ninety-five times over nine
+        parts, for nine distinct shapes.  The object is a read-only query:
+        each ``Perform`` replaces the previous result and nothing carries over
+        between them, which is the same argument
+        :class:`~occline.kernel.occ_kernel.OccKernelServices` already makes
+        for sharing one solid classifier per part.
+        """
+        key = float(tolerance)
+        cached = self._intersectors.get(key)
+        if cached is None:
+            cached = IntCurvesFace_ShapeIntersector()
+            cached.Load(self.shape, key)
+            self._intersectors[key] = cached
+        return cached
 
     def cad_face_id(self, face: TopoDS_Face) -> int | None:
         for index in self._hash_to_indices.get(hash(face), []):

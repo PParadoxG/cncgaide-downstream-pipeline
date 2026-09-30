@@ -7,6 +7,10 @@ own tree rather than installed from a package index.  Packages installed by
 tqdm, PyYAML) carry their own licences through their distributions and are not
 repeated here.
 
+One installed dependency is listed anyway, at the end: occwl, because it is
+installed from a git repository rather than from an index and used to be
+vendored here.
+
 
 -------------------------------------------------------------------------------
 AAGNet
@@ -24,19 +28,6 @@ AAGNet
   They are part of the repository, so a clone needs no separate download.  The
   weights are hashed into the `aagnet` layer stamp: replacing them rebuilds
   every part, which is the intended behaviour.
-
-
--------------------------------------------------------------------------------
-occwl (OCC Wrapper Library)
-  Path      src/occline/aagnet/vendor/occwl/
-  Upstream  https://github.com/AutodeskAILab/occwl
-
-  A Pythonic wrapper around pythonocc, used by AAGNet's graph extractor.
-
-  NOTE: this snapshot does not include the upstream LICENCE file.  The licence
-  therefore cannot be stated from the contents of this repository alone.  This
-  gap must be closed - by vendoring the upstream LICENCE - before the code is
-  distributed outside the group.
 
 
 -------------------------------------------------------------------------------
@@ -65,13 +56,15 @@ three.js  (r160)
 
 
 -------------------------------------------------------------------------------
-Cytoscape.js
+Cytoscape.js  (3.28.1)
   Path      src/visualization/vendor/cytoscape.min.js
   Upstream  https://github.com/cytoscape/cytoscape.js
   Licence   MIT - declared in the file header
             Copyright (c) 2016-2023, The Cytoscape Consortium
 
-  The feature-graph view.
+  The feature-graph view.  The version is declared by the file itself; see
+  src/visualization/vendor/VERSIONS.md for how each vendored browser library
+  is identified, and for the sha256 of the files as downloaded.
 
 
 -------------------------------------------------------------------------------
@@ -105,3 +98,27 @@ Siemens NX
   Consequence for anyone without NX: the open-source line runs anyway.  A
   missing or unlicensed NX is recorded as a named degradation
   (`lines.nx = NOT_BUILT` with a reason), never as a failure.
+
+
+-------------------------------------------------------------------------------
+occwl (OCC Wrapper Library)  -  not vendored, installed from upstream
+  Path      none in this repository
+  Upstream  https://github.com/AutodeskAILab/occwl
+  Pinned to https://github.com/AutodeskAILab/occwl
+            @8b536ea8b3cf977dbafc1cf0a89eaa28fa996bba  (version 3.0.0)
+
+  A Pythonic wrapper around pythonocc.  AAGNet's graph extractor imports it,
+  which is the only reason this project has it at all.
+
+  It is installed, not copied: `install/environment.yml` names the commit above
+  in its pip section, so `conda env create` fetches it from upstream.  It is not
+  on PyPI, which is why the pin is a git URL rather than a version.  Nothing
+  from it is redistributed with this repository.
+
+  Licence status, stated as fact rather than inferred: upstream declares
+  `license: BSD` in its conda recipe (`ci/conda/meta.yaml`) and ships no licence
+  text - no LICENSE, LICENCE or COPYING file exists in its working tree, in its
+  whole git history, in the GitHub licence API (which returns 404 for it), or in
+  its published conda package.  Which BSD variant, and which copyright holder,
+  upstream does not say.  Whoever installs it obtains it from upstream on
+  upstream's terms.

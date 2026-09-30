@@ -67,6 +67,10 @@ def _from_local_config() -> str | None:
     """The path in ``config/nx_local.json``, or None if it cannot be used."""
 
     global _problem
+    # Re-read means re-judge: a file that has since been repaired has no
+    # problem, and reporting the old one sends a reader after a fault that is
+    # no longer there.
+    _problem = None
     path = _PROJECT_ROOT / LOCAL_CONFIG
     if not path.is_file():
         return None

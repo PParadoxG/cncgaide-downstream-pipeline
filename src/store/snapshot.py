@@ -19,12 +19,18 @@ def snapshot(project_root: str | Path, from_tag: str, to_tag: str) -> Path:
     root = Path(project_root).resolve()
     source = run_paths(root, from_tag)["run_root"]
     target = run_paths(root, to_tag)["run_root"]
+    # Asked first, because a source that exists makes ``target.exists()`` true
+    # as well when the two tags are the same - so "pick another tag or remove
+    # it first" would be the advice given to somebody whose real mistake was
+    # naming one tag twice, and removing it would delete the source.
+    if source == target:
+        raise ValueError(
+            f"source and target tag are the same ({from_tag!r}): "
+            "a snapshot copies one run to another")
     if not source.is_dir():
         raise FileNotFoundError(f"no run at {source}")
     if target.exists():
         raise FileExistsError(f"{target} already exists; pick another tag or remove it first")
-    if from_tag == to_tag:
-        raise ValueError("source and target tag are the same")
     shutil.copytree(source, target, ignore=shutil.ignore_patterns(STAGING_DIR, "*.tmp"))
     rebuild_index(root, to_tag)
     return target

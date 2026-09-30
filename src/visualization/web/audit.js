@@ -5,6 +5,9 @@
 //                                // launcher: store + similarity API
 //                                // compare page: both views, edit path, highlights
 //   await runAutoViewAudit();    // part page: does the camera see the feature
+//   await runTimingAudit();      // compare page / launcher: a superseded
+//                                // answer must not land (needs the server's
+//                                // debug delay switch; see "timing" below)
 //
 // It walks every part, every feature and every raw CAD face using only the
 // public window.tempVisual / window.tempCompare hooks plus real cytoscape/DOM
@@ -12,11 +15,48 @@
 // after touching anything under visualization/, and after a main-line change
 // to features or relations.
 
+/** The kernel lines this page offers, read off the switch.
+ *
+ *  The list used to be written out here as a pair.  The registry allows more
+ *  than two lines (contract/registry.py), and a third one would have been
+ *  skipped by every sweep below without a word - an audit that quietly stops
+ *  covering something is worse than no audit.
+ */
+function pageLines() {
+  const ids = [...document.querySelectorAll('#line-seg button[data-line]')]
+    .map((button) => button.dataset.line)
+    .filter(Boolean);
+  if (!ids.length) throw new Error('runViewerAudit: this page has no line switch');
+  return ids;
+}
+
+/** Hold every transition still for the length of a measurement.
+ *
+ *  The geometry pass asks where a control ended up, and a control that slides
+ *  there answers with wherever it is mid-slide.  Waiting it out is not enough:
+ *  in a document the host never paints - a hidden tab, an embedded pane, a
+ *  headless run - the transition does not advance at all, so the thumb stays
+ *  at its starting value for ever and the pass reports it as sitting under the
+ *  wrong tab.  That was two standing false failures, in exactly the runs where
+ *  nobody could look at the screen to know better.
+ *
+ *  Freezing transitions makes the final value the current value in one frame,
+ *  in every host.  It is the layout being checked here, never the animation.
+ */
+function freezeTransitions() {
+  const style = document.createElement('style');
+  style.textContent = '*, *::before, *::after '
+    + '{ transition: none !important; animation: none !important; }';
+  document.head.append(style);
+  void document.body.offsetHeight; // force the frozen values to be computed
+  return () => style.remove();
+}
+
 window.runViewerAudit = async function runViewerAudit() {
   if (window.tempCompare) return withGeometry(auditComparePage());
   if (document.getElementById('part-select') && window.tempVisual) {
     const results = await auditPartPage();
-    for (const line of ['occ', 'nx']) results.push(await auditSimilarityApi(line));
+    for (const line of pageLines()) results.push(await auditSimilarityApi(line));
     return withGeometry(results);
   }
   if (document.getElementById('view-tabs')) return withGeometry(auditLauncherPage());
@@ -32,22 +72,27 @@ window.runViewerAudit = async function runViewerAudit() {
  *  never been the broken one. */
 async function withGeometry(pending) {
   const results = await pending;
-  const tabs = [...document.querySelectorAll('#view-tabs button[data-view]')];
-  if (!tabs.length) {
-    results.push(auditGeometry());
-    return results;
-  }
-  const chosen = tabs.find((tab) => tab.getAttribute('aria-selected') === 'true') || tabs[0];
-  for (const tab of tabs) {
-    tab.click();
+  const thaw = freezeTransitions();
+  try {
+    const tabs = [...document.querySelectorAll('#view-tabs button[data-view]')];
+    if (!tabs.length) {
+      results.push(auditGeometry());
+      return results;
+    }
+    const chosen = tabs.find((tab) => tab.getAttribute('aria-selected') === 'true') || tabs[0];
+    for (const tab of tabs) {
+      tab.click();
+      await settled();
+      const pass = auditGeometry();
+      pass.partId = `(geometry ${tab.dataset.view})`;
+      results.push(pass);
+    }
+    chosen.click();
     await settled();
-    const pass = auditGeometry();
-    pass.partId = `(geometry ${tab.dataset.view})`;
-    results.push(pass);
+    return results;
+  } finally {
+    thaw();
   }
-  chosen.click();
-  await settled();
-  return results;
 }
 
 /** Wait until the boxes stop moving.
@@ -60,7 +105,11 @@ async function withGeometry(pending) {
  *  for a few frames *before* the transition starts, which reads as settled
  *  and the pass then measures the old position.  So the geometry must hold
  *  still for a stretch of wall time longer than any trigger-to-movement
- *  latency -- a property of render scheduling, not of the stylesheet. */
+ *  latency -- a property of render scheduling, not of the stylesheet.
+ *
+ *  The geometry pass freezes transitions before it calls this (see
+ *  freezeTransitions), so what is being waited out there is the relayout a
+ *  view switch causes, not a slide. */
 async function settled(limit = 80) {
   let previous = null;
   let heldSince = performance.now();
@@ -108,7 +157,7 @@ async function auditPartPage() {
     await frame();
   }
 
-  for (const line of ['occ', 'nx']) {
+  for (const line of pageLines()) {
   await switchLine(line);
   accentSeen[line] = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
   for (const partId of partIds) {
@@ -262,7 +311,8 @@ async function auditPartPage() {
         if (graphSelected.join(',') !== expectedSelected.join(',')) {
           failures.push(`face ${cadFaceId}: graph sel [${graphSelected}] != [${expectedSelected}]`);
         }
-        const lit = Object.keys(tv.viewer.debugFaces()).filter((id) => tv.viewer.debugFaces()[id].lit);
+        const faceStates = tv.viewer.debugFaces();
+        const lit = Object.keys(faceStates).filter((id) => faceStates[id].lit);
         if (!lit.map(Number).includes(cadFaceId)) failures.push(`face ${cadFaceId}: not lit after pick`);
       } else {
         unclaimedChecks += 1;
@@ -625,6 +675,10 @@ async function auditSimilarityApi(line) {
       if (!configs.payload.weights || !Object.keys(configs.payload.weights).length) failures.push('configs: no weight specs');
       if (line && configs.payload.line !== line) failures.push(`configs: answered for ${configs.payload.line}, asked ${line}`);
       if (!configs.payload.representation) failures.push('configs: no representation named');
+      // The compare page folds micro edits at the run's own threshold; if
+      // the answer stops carrying it the page silently falls back to a
+      // number written in its own source, which is what this replaced.
+      if (!(Number(configs.payload.microEditCost) >= 0)) failures.push('configs: no micro-edit threshold');
     }
     const index = await get('data/index.json');
     const ids = (index.payload.parts || []).map((part) => part.partId);
@@ -689,75 +743,76 @@ async function auditLauncherPage() {
   if (tabs.length !== 3) failures.push(`expected 3 view tabs, found ${tabs.length}`);
   const results = [{ partId: '(launcher)', launcherChecks: checks, failures }];
   results.push(await auditLauncherProviders());
-  for (const line of ['occ', 'nx']) results.push(await auditSimilarityApi(line));
+  for (const line of pageLines()) results.push(await auditSimilarityApi(line));
   return results;
 }
 
-// The line switch on the launcher: both lines render their own numbers and,
-// since node 21', both answer Similarity from their own corpus - so the
+// The line switch on the launcher: every line renders its own numbers and,
+// since node 21', every line answers Similarity from its own corpus - so the
 // checks that used to assert the NX side was switched off now assert it is
-// switched on.  The audit puts the reviewer's choice back at the end.
+// switched on.  Nothing here names a line: the sweep is over whatever the
+// switch offers, and each pass is checked against that line's own section of
+// the index.  The audit puts the reviewer's choice back at the end.
 async function auditLauncherProviders() {
   const failures = [];
   let checks = 0;
   const seg = document.getElementById('line-seg');
-  const buttons = seg ? seg.querySelectorAll('button[data-line]') : [];
+  const buttons = [...(seg ? seg.querySelectorAll('button[data-line]') : [])];
   checks += 1;
-  if (buttons.length !== 2) {
-    failures.push(`expected a 2-segment line switch, found ${buttons.length} buttons`);
+  if (buttons.length < 2) {
+    failures.push(`expected a line switch with at least two lines, found ${buttons.length}`);
     return { partId: '(line)', lineChecks: checks, failures };
   }
-  const original = document.documentElement.dataset.line || 'occ';
+  const lines = buttons.map((button) => button.dataset.line);
+  const labels = new Map(buttons.map((button) => [button.dataset.line, button.textContent.trim()]));
+  const original = document.documentElement.dataset.line || lines[0];
   const accent = () => getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
   const index = await fetch('data/index.json', { cache: 'no-store' }).then((r) => r.json());
   const click = async (line) => {
-    seg.querySelector(`button[data-line="${line}"]`).click();
+    seg.querySelector(`button[data-line="${CSS.escape(line)}"]`).click();
     await frame();
   };
 
   const accents = {};
-  await click('occ');
-  accents.occ = accent();
-
-  await click('nx');
-  accents.nx = accent();
-  checks += 1;
-  if (accents.occ === accents.nx) failures.push('accent token did not change with the line');
-  checks += 1;
-  if (!document.getElementById('run-line').textContent.includes('NX FBM')) {
-    failures.push('footer does not name the NX line');
-  }
   const simTab = document.querySelector('#view-tabs button[data-view="similarity"]');
-  checks += 1;
-  if (simTab.disabled) failures.push('similarity tab disabled on the NX line');
-  checks += 1;
-  if (document.querySelector('#rows .part-row .col-actions')
-      && ![...document.querySelectorAll('#rows .part-row .col-actions button')]
-        .some((button) => button.textContent === 'Similar')) {
-    failures.push('row Similar action missing on the NX line');
-  }
-  // A row with an ok NX side shows that side's numbers.
-  const sample = (index.parts || []).find(
-    (part) => part.lines && part.lines.nx && part.lines.nx.status === 'PASS',
-  );
-  if (sample) {
+  const statsFailures = [];
+  for (const line of lines) {
+    await click(line);
+    accents[line] = accent();
     checks += 1;
-    const row = document.querySelector(`#rows .part-row[data-part-id="${CSS.escape(sample.partId)}"]`);
-    const cells = row ? row.querySelectorAll('.col-num') : [];
-    const features = cells[1] && Number(cells[1].textContent);
-    if (features !== sample.lines.nx.nodeCount) {
-      failures.push(`${sample.partId}: features cell ${features} != NX nodeCount ${sample.lines.nx.nodeCount}`);
+    if (!document.getElementById('run-line').textContent.includes(labels.get(line))) {
+      failures.push(`footer does not name the ${line} line`);
     }
+    checks += 1;
+    if (simTab.disabled) failures.push(`similarity tab disabled on the ${line} line`);
+    checks += 1;
+    if (document.querySelector('#rows .part-row .col-actions')
+        && ![...document.querySelectorAll('#rows .part-row .col-actions button')]
+          .some((button) => button.textContent === 'Similar')) {
+      failures.push(`row Similar action missing on the ${line} line`);
+    }
+    // A row this line built shows that line's own numbers.
+    const sample = (index.parts || []).find(
+      (part) => part.lines && part.lines[line] && part.lines[line].status === 'PASS',
+    );
+    if (sample) {
+      checks += 1;
+      const row = document.querySelector(`#rows .part-row[data-part-id="${CSS.escape(sample.partId)}"]`);
+      const cells = row ? row.querySelectorAll('.col-num') : [];
+      const features = cells[1] && Number(cells[1].textContent);
+      if (features !== sample.lines[line].nodeCount) {
+        failures.push(`${sample.partId}: features cell ${features} != ${line} nodeCount `
+          + `${sample.lines[line].nodeCount}`);
+      }
+    }
+    // The statistics view folds the shown line's own verdicts, so its numbers
+    // have to move with the line and match that line's own index section.
+    statsFailures.push(...await auditStatsFold(index, line));
   }
-
-  // The statistics view folds the shown line's own verdicts, so its numbers
-  // have to move with the line and match that line's own index section.
-  const statsFailures = await auditStatsFold(index, 'nx');
-
-  await click('occ');
   checks += 1;
-  if (simTab.disabled) failures.push('similarity tab disabled back on the open-source line');
-  statsFailures.push(...await auditStatsFold(index, 'occ'));
+  if (new Set(Object.values(accents)).size !== lines.length) {
+    failures.push('two lines share an accent token: the page cannot be told apart');
+  }
   await click(original);
   failures.push(...statsFailures);
   return { partId: '(line)', lineChecks: checks + statsFailures.length + 2, accents, failures };
@@ -883,6 +938,145 @@ function frame() {
   // setTimeout, not requestAnimationFrame: a background/hidden tab never fires
   // rAF and the audit would hang forever.
   return new Promise((resolve) => setTimeout(resolve, 40));
+}
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// ------------------------------------------------------------------ timing
+//
+//   await runTimingAudit();
+//
+// The two places where an answer can arrive after it stopped being the
+// answer (node 26 G-09): a compare reload superseded by a second one, and a
+// ranking superseded by a line switch.  Both were fixed with a request
+// generation, and neither could be *tested* - the race needs a slow response,
+// and every response here is fast.
+//
+// The fixture is the server's `?delayMs=N`, which only exists when the server
+// was started with GATHERSEED_VIEWER_DEBUG_DELAY set:
+//
+//   $env:GATHERSEED_VIEWER_DEBUG_DELAY='1'
+//   python run_pipeline.py view --port 18777 --no-browser --no-refresh-api
+//
+// The audit does not change the page: it wraps `fetch` for the length of one
+// check so the *first* matching request is asked to be slow, drives the page
+// the way a reviewer would, and puts `fetch` back.
+
+/** Ask the server to be slow for the first request matching *pattern*. */
+function slowFirst(pattern, ms) {
+  const original = window.fetch;
+  let used = false;
+  window.fetch = function slowed(input, init) {
+    const url = String(typeof input === 'string' ? input : (input && input.url) || '');
+    if (!used && pattern.test(url)) {
+      used = true;
+      const separator = url.includes('?') ? '&' : '?';
+      return original.call(this, `${url}${separator}delayMs=${ms}`, init);
+    }
+    return original.call(this, input, init);
+  };
+  return () => { window.fetch = original; return used; };
+}
+
+/** Is the delay switch on?  Timed, because an ignored parameter is silent. */
+async function delaysHonoured(ms = 700) {
+  const start = performance.now();
+  await fetch(`api/status?delayMs=${ms}`, { cache: 'no-store' }).catch(() => null);
+  return performance.now() - start > ms * 0.6;
+}
+
+window.runTimingAudit = async function runTimingAudit() {
+  if (!(await delaysHonoured())) {
+    return [{
+      partId: '(timing)', timingChecks: 0, skipped: true,
+      failures: [],
+      note: 'server started without GATHERSEED_VIEWER_DEBUG_DELAY - no slow response to race with',
+    }];
+  }
+  if (window.tempCompare) return auditCompareRace();
+  if (window.tempLauncher) return auditRankRace();
+  throw new Error('runTimingAudit: run it on the compare page or the launcher');
+};
+
+/**
+ * Two reloads, the first one slow: the page must end up showing the part the
+ * second one asked for, with a pair result computed on that part.
+ */
+async function auditCompareRace() {
+  const tc = window.tempCompare;
+  const failures = [];
+  const ids = [...document.querySelectorAll('#part-a option')].map((option) => option.value);
+  const back = tc.sides.a.partId;
+  const other = ids.find((id) => id !== back && id !== tc.sides.b.partId);
+  if (!other) return [{ partId: '(timing)', timingChecks: 0, failures: ['need three parts to race'] }];
+
+  const select = document.getElementById('part-a');
+  const restore = slowFirst(/\/data\/|api\/similarity\/compare/, 2500);
+  try {
+    select.value = other;
+    select.dispatchEvent(new Event('change'));
+    await sleep(120);
+    select.value = back;
+    select.dispatchEvent(new Event('change'));
+    // Long enough for the slow one to come back and be dropped.
+    await sleep(3500);
+  } finally {
+    if (!restore()) failures.push('no request was slowed - the pattern matched nothing');
+  }
+  await waitFor(() => tc.state.payload && tc.sides.a.model, 20000);
+  if (tc.sides.a.partId !== back) failures.push(`side a settled on ${tc.sides.a.partId}, expected ${back}`);
+  if (tc.sides.a.model.partId !== back) failures.push(`side a shows ${tc.sides.a.model.partId}, expected ${back}`);
+  const hud = (document.getElementById('hud-a') || {}).textContent || '';
+  if (!hud.includes(back)) failures.push(`hud a reads "${hud}", expected ${back}`);
+  const pair = tc.state.payload || {};
+  const named = [pair.a, pair.b].filter(Boolean);
+  if (named.length && !named.includes(back)) failures.push(`pair result is about ${named.join('/')}, not ${back}`);
+  return [{ partId: '(timing compare)', timingChecks: 4, superseded: other, failures }];
+}
+
+/**
+ * A ranking overtaken by a line switch: the answer computed on the line being
+ * left must not land under the line arrived at - the one comparison node 21'
+ * says cannot be made.
+ */
+async function auditRankRace() {
+  const panel = window.tempLauncher.similarity;
+  const failures = [];
+  const lines = pageLines();
+  const startLine = window.tempLauncher.line;
+  const otherLine = lines.find((id) => id !== startLine);
+  if (!otherLine) return [{ partId: '(timing)', timingChecks: 0, failures: ['need two lines to race'] }];
+
+  // The panel builds itself when its view is first opened, so the race has
+  // to be run on the view the reviewer would be looking at.
+  const tab = document.querySelector('#view-tabs button[data-view="similarity"]');
+  if (tab) tab.click();
+  await waitFor(() => panel.state.built && panel.state.specs && panel.state.query, 20000);
+
+  const buttons = [...document.querySelectorAll('#line-seg button[data-line]')];
+  const click = (id) => buttons.find((button) => button.dataset.line === id).click();
+  const restore = slowFirst(/api\/similarity\/rank/, 2500);
+  let landed = null;
+  try {
+    panel.runQuery();
+    await sleep(120);
+    click(otherLine);
+    // Long enough for the slow ranking to come back and be dropped.
+    await sleep(3500);
+    landed = panel.state.result;
+  } finally {
+    if (!restore()) failures.push('no ranking request was slowed');
+    click(startLine);
+    await sleep(400);
+  }
+  // Read before the line is put back, because putting it back drops the
+  // result too - what is being checked is what the *switch* left behind.
+  if (landed && landed.line === startLine) {
+    failures.push(`a ranking computed on ${startLine} survived the switch to ${otherLine}`);
+  }
+  if (panel.state.busy) failures.push('the panel is still busy after the race');
+  return [{ partId: '(timing rank)', timingChecks: 2, leftLine: startLine, arrivedAt: otherLine,
+            landedLine: landed ? landed.line : null, failures }];
 }
 
 async function waitFor(predicate, timeout = 10000) {

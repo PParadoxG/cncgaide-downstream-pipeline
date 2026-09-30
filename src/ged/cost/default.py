@@ -9,7 +9,7 @@ from __future__ import annotations
 from ged.contract.representation import NX_V1, Representation, V5_1
 
 from .config import CostConfig
-from .edge_cost import edge_base_weight, edge_mismatch
+from .edge_cost import edge_mismatch, make_edge_base_weight
 from .fixed_cost import fixed_cost_upper_bound, make_fixed_node_cost
 from .node_cost import make_geometry_distance
 from .nx_type_matrix import type_cost as nx_type_cost
@@ -42,6 +42,7 @@ DIALECTS: dict[str, dict[str, object]] = {
         # v5.1's leaves publish a handful of attributes each and every one of
         # them is a measurement, so every shared pair is compared.
         "geometry_distance": make_geometry_distance(V5_1),
+        "edge_base_weight": make_edge_base_weight(V5_1),
     },
     NX_V1.name: {
         "representation": NX_V1,
@@ -50,6 +51,9 @@ DIALECTS: dict[str, dict[str, object]] = {
         # Double-zero skip (19' D7 = a): an NX class inherits every slot its
         # chain declares and the unused ones read 0.
         "geometry_distance": make_geometry_distance(NX_V1, skip_both_zero=True),
+        # nx_v1 publishes six relations and prices the two it does not group;
+        # DIRECT_ADJACENT, which v5.1 prices, does not exist on this side.
+        "edge_base_weight": make_edge_base_weight(NX_V1),
     },
 }
 
@@ -68,7 +72,7 @@ def default_config(name: str = "v0_default", *, w_local: float = W_LOCAL,
         c_ins=C_INS,
         type_cost=dialect["type_cost"],
         geometry_distance=dialect["geometry_distance"],
-        edge_base_weight=edge_base_weight,
+        edge_base_weight=dialect["edge_base_weight"],
         edge_mismatch=edge_mismatch,
         fixed_node_cost=make_fixed_node_cost(
             W_RES, shares=representation.fixed_budget_shares,

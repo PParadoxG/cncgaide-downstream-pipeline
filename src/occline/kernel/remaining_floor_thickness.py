@@ -6,9 +6,8 @@ import math
 from typing import Any
 
 from OCC.Core.BRepAdaptor import BRepAdaptor_Surface
-from OCC.Core.BRepClass import BRepClass_FaceClassifier
+from OCC.Core.BRepTopAdaptor import BRepTopAdaptor_FClass2d
 from OCC.Core.BRepTools import breptools
-from OCC.Core.IntCurvesFace import IntCurvesFace_ShapeIntersector
 from OCC.Core.TopAbs import TopAbs_IN, TopAbs_ON
 from OCC.Core.gp import gp_Dir, gp_Lin, gp_Pnt, gp_Pnt2d
 
@@ -32,8 +31,7 @@ def compute_remaining_floor_thickness(
     if direction is None or not bottom_cad_face_ids:
         return None
 
-    intersector = IntCurvesFace_ShapeIntersector()
-    intersector.Load(context.shape, tolerance)
+    intersector = context.ray_intersector(tolerance)
     epsilon = max(tolerance * 10.0, context.max_ray_distance * 1.0e-9)
     distances: list[float] = []
     for cad_face_id in sorted(bottom_cad_face_ids):
@@ -99,7 +97,13 @@ def compute_min_wall_thickness(
         "status": "not_measured",
     }
 
+    # Stations lost because the surface has no defined normal there.  Written
+    # into the diagnostics only when there were any, so a part that never hits
+    # a degenerate pole produces exactly the bytes it always did.
+    normal_gaps: dict[str, Any] = {}
+
     def finish(value: float | None) -> float | None:
+        details.update(normal_gaps)
         details["sampledWallCadFaceIds"] = sorted(set(details["sampledWallCadFaceIds"]))
         details["hitCadFaceIds"] = sorted(set(details["hitCadFaceIds"]))
         details["acceptedHitCadFaceIds"] = sorted(set(details["acceptedHitCadFaceIds"]))
@@ -120,15 +124,14 @@ def compute_min_wall_thickness(
 
     if context is None or not wall_cad_face_ids:
         return finish(None)
-    intersector = IntCurvesFace_ShapeIntersector()
-    intersector.Load(context.shape, tolerance)
+    intersector = context.ray_intersector(tolerance)
     epsilon = max(tolerance * 10.0, context.max_ray_distance * 1.0e-9)
     distances: list[float] = []
     for cad_face_id in sorted(wall_cad_face_ids):
         face = context.cad_face(cad_face_id)
         if face is None:
             continue
-        samples = _interior_face_points_with_normals(face, tolerance)
+        samples = _interior_face_points_with_normals(face, tolerance, normal_gaps)
         details["sampledWallCadFaceIds"].append(cad_face_id)
         details["sampleCount"] += len(samples)
         for point, normal in samples:
@@ -175,14 +178,16 @@ def _interior_face_points(face, tolerance: float) -> list[list[float]]:
         return []
 
     surface = BRepAdaptor_Surface(face)
-    classifier = BRepClass_FaceClassifier()
+    try:
+        classifier = BRepTopAdaptor_FClass2d(face, tolerance)
+    except Exception:
+        return []
     candidates: list[tuple[float, float, float]] = []
     for u_fraction in _UV_FRACTIONS:
         for v_fraction in _UV_FRACTIONS:
             u = float(u_min) + (float(u_max) - float(u_min)) * u_fraction
             v = float(v_min) + (float(v_max) - float(v_min)) * v_fraction
-            classifier.Perform(face, gp_Pnt2d(u, v), tolerance)
-            if classifier.State() not in {TopAbs_IN, TopAbs_ON}:
+            if classifier.Perform(gp_Pnt2d(u, v)) not in {TopAbs_IN, TopAbs_ON}:
                 continue
             point = surface.Value(u, v)
             center_distance = abs(u_fraction - 0.5) + abs(v_fraction - 0.5)
@@ -191,7 +196,19 @@ def _interior_face_points(face, tolerance: float) -> list[list[float]]:
     return [[x, y, z] for _, x, y, z in candidates]
 
 
-def _interior_face_points_with_normals(face, tolerance: float) -> list[tuple[list[float], list[float]]]:
+def _interior_face_points_with_normals(
+    face,
+    tolerance: float,
+    gaps: dict[str, Any] | None = None,
+) -> list[tuple[list[float], list[float]]]:
+    """``(point, outward unit normal)`` for the uv stations inside *face*.
+
+    ``get_outward_normal`` returns ``None`` where the normal is not defined -
+    a cone apex, a collapsed pole of a free-form patch.  That is a gap, not a
+    measurement: the station is skipped and counted into *gaps* so the caller
+    can say how many stations it lost, rather than the whole part dying on an
+    ``AttributeError`` raised three frames further down.
+    """
     try:
         u_min, u_max, v_min, v_max = breptools.UVBounds(face)
     except Exception:
@@ -202,24 +219,29 @@ def _interior_face_points_with_normals(face, tolerance: float) -> list[tuple[lis
     if float(u_max) <= float(u_min) or float(v_max) <= float(v_min):
         return []
     surface = BRepAdaptor_Surface(face)
-    classifier = BRepClass_FaceClassifier()
+    try:
+        classifier = BRepTopAdaptor_FClass2d(face, tolerance)
+    except Exception:
+        return []
     result: list[tuple[list[float], list[float]]] = []
+    undefined_normals = 0
     for u_fraction in _UV_FRACTIONS:
         for v_fraction in _UV_FRACTIONS:
             u = float(u_min) + (float(u_max) - float(u_min)) * u_fraction
             v = float(v_min) + (float(v_max) - float(v_min)) * v_fraction
             try:
-                classifier.Perform(face, gp_Pnt2d(u, v), tolerance)
-                if classifier.State() not in {TopAbs_IN, TopAbs_ON}:
+                if classifier.Perform(gp_Pnt2d(u, v)) not in {TopAbs_IN, TopAbs_ON}:
                     continue
                 point = surface.Value(u, v)
-                normal = get_outward_normal(face, u, v)
+                # ``surface`` is this face's own adaptor, built once above;
+                # without it every station rebuilds an identical one.
+                normal = get_outward_normal(face, u, v, surface)
             except Exception:
                 continue
-            if isinstance(normal, (list, tuple)) and len(normal) == 3:
-                vector = [float(normal[index]) for index in range(3)]
-            else:
-                vector = [float(normal.X()), float(normal.Y()), float(normal.Z())]
+            if not (isinstance(normal, (list, tuple)) and len(normal) == 3):
+                undefined_normals += 1
+                continue
+            vector = [float(normal[index]) for index in range(3)]
             norm = math.sqrt(sum(value * value for value in vector))
             if norm <= 1.0e-12:
                 continue
@@ -227,6 +249,10 @@ def _interior_face_points_with_normals(face, tolerance: float) -> list[tuple[lis
                 [float(point.X()), float(point.Y()), float(point.Z())],
                 [value / norm for value in vector],
             ))
+    if undefined_normals and gaps is not None:
+        gaps["undefinedOutwardNormalSampleCount"] = (
+            int(gaps.get("undefinedOutwardNormalSampleCount", 0)) + undefined_normals
+        )
     return result
 
 

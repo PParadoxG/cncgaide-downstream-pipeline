@@ -85,26 +85,28 @@ STEP exporters sometimes emit the same physical curve as several *duplicate
 edge entities* (each face loop references its own copy).  The parser keeps
 one id per OCCT entity, so such copies are not the same edge id.  This module
 therefore uses a deterministic geometric-signature equivalence (curve type +
-length + sampled point cloud, identical to the canonical equivalence used by
-``hole_topology`` for seam-split copies) to treat coincident duplicates as
-one logical edge.  All rim / loop comparisons happen on signatures; reported
-edge ids are the canonical representative (smallest id) of each signature
-class.  No fuzzy / approximate geometric matching is used.
+length + sampled point cloud) to treat coincident duplicates as one logical
+edge.  The rule and the per-model index built from it are
+``topology.signatures`` / ``topology.edge_index``, shared with the rim walk
+that needs the same equivalence.  All rim / loop comparisons happen on
+signatures; reported edge ids are the canonical representative (smallest id)
+of each signature class.  No fuzzy / approximate geometric matching is used.
 """
 
 from __future__ import annotations
 
-import re
 from collections import deque
 from dataclasses import dataclass, field
 from typing import Any
 
 from contract.partmodel import PartModel, SurfaceType
 
+from topology.edge_index import EdgeIndex, build_edge_index  # noqa: F401
+from topology.faces import face_sort_key
+
 _MAX_CYCLES_PER_ANCHOR = 64
 _MAX_EXTRA_CYCLES = 8
 _VERTEX_MERGE_ROUND = 4
-_SIGNATURE_ROUND = 6
 # Hard traversal bound.  Visited-state dedup already makes propagation finite;
 # this only caps pathological chains and is reported when it bites.
 _MAX_DISCOVERY_DEPTH = 8
@@ -168,6 +170,10 @@ class WallBandRejection:
     detail: str = ""
     seed_type: str = SEED_INNER_LOOP
     discovery_depth: int = 0
+    # True only when the cycle enumeration behind this seed stopped at
+    # ``_MAX_CYCLES_PER_ANCHOR``: the stated reason is then a consequence of a
+    # truncated search, not of the geometry.
+    cycle_budget_hit: bool = False
 
 
 @dataclass(frozen=True)
@@ -199,21 +205,8 @@ class WallBandAnalysis:
     depth_limit_hits: int = 0
 
 
-@dataclass
-class EdgeIndex:
-    """Per-part edge bookkeeping with geometric-signature equivalence."""
-
-    edge_sig: dict[str, tuple]
-    sig_to_edge_ids: dict[tuple, list[str]]
-    sig_incidence: dict[tuple, set[str]]
-    loop_duplicate_edges: set[str]
-    self_seam_sigs: set[tuple]
-
-    def representative(self, sig: tuple) -> str:
-        return self.sig_to_edge_ids[sig][0]
-
-
-def discover_wall_bands(model: PartModel, claimed_face_ids: set[str] | None = None) -> WallBandAnalysis:
+def discover_wall_bands(model: PartModel, claimed_face_ids: set[str] | None = None,
+                        edge_index: "EdgeIndex | None" = None) -> WallBandAnalysis:
     """Discover all closed wall bands reachable from inner loops.
 
     Root seeds are inner loops; every accepted band additionally seeds a
@@ -226,7 +219,9 @@ def discover_wall_bands(model: PartModel, claimed_face_ids: set[str] | None = No
     and a band already claimed here must not block topology propagation.
     """
     claimed = set(claimed_face_ids or ())
-    index = build_edge_index(model)
+    # ``edge_index`` is the one the orchestrator built for this part; it is a
+    # pure function of the model, so building our own only repeats the work.
+    index = edge_index if edge_index is not None else build_edge_index(model)
     wall_ids = set(model.faces)
 
     anchors: list[tuple[str, str, frozenset]] = []
@@ -403,13 +398,18 @@ def _rejection_summary(rejections: list[WallBandRejection]) -> dict[str, int]:
 
 
 def _rejection_dict(item: WallBandRejection) -> dict[str, Any]:
-    return {
+    record = {
         "rootAnchorFaceId": item.anchor_face_id,
         "rootAnchorLoopId": item.anchor_loop_id,
         "seedType": item.seed_type,
         "discoveryDepth": item.discovery_depth,
         "reason": item.reason,
     }
+    # Only written when the budget actually bit, so a seed rejected on its own
+    # geometry keeps the record it always had.
+    if item.cycle_budget_hit:
+        record["cycleBudgetHit"] = True
+    return record
 
 
 # ---------------------------------------------------------------------------
@@ -436,8 +436,16 @@ def _analyze_seed(
     anchor_loop_id = seed.root_anchor_loop_id
     is_root = seed.seed_type == SEED_INNER_LOOP
 
+    # Set once the cycle enumeration below has run; every rejection recorded
+    # after that point carries it, so a reader can tell a geometric refusal
+    # from one handed down by the traversal budget.
+    budget_hit = False
+
     def _reject(reason: str, detail: str = "") -> WallBandRejection:
-        return WallBandRejection(anchor_face_id, anchor_loop_id, reason, detail, seed.seed_type, seed.depth)
+        return WallBandRejection(
+            anchor_face_id, anchor_loop_id, reason, detail, seed.seed_type, seed.depth,
+            budget_hit,
+        )
 
     # ---- 1. far-side faces of the seed rim --------------------------------
     far_faces: set[str] = set()
@@ -463,7 +471,7 @@ def _analyze_seed(
         if len(faces & band_raw) == 1:
             external[sig] = faces
 
-    cycles = _closed_cycles(model, index, list(external))
+    cycles, budget_hit = _closed_cycles(model, index, list(external))
     if not cycles:
         return _reject("rim_not_closed", "no closed boundary cycle at the far end of the wall band")
 
@@ -532,8 +540,8 @@ def _analyze_seed(
         rim_b_edge_ids=sorted(index.representative(sig) for sig in rim_b),
         rim_a_wall_face_ids=sorted(face_id for face_id in band_set if _shares(face_id, rim_a)),
         rim_b_wall_face_ids=sorted(face_id for face_id in band_set if _shares(face_id, rim_b)),
-        rim_a_adjacent_face_ids=_rim_adjacent_faces(model, index, rim_a, band_set),
-        rim_b_adjacent_face_ids=_rim_adjacent_faces(model, index, rim_b, band_set),
+        rim_a_adjacent_face_ids=_rim_adjacent_faces(index, rim_a, band_set),
+        rim_b_adjacent_face_ids=_rim_adjacent_faces(index, rim_b, band_set),
         rim_a_is_inner_loop=rim_a_match is not None,
         rim_b_is_inner_loop=rim_b_match is not None,
         rim_a_match=rim_a_match,
@@ -581,7 +589,7 @@ def _connected_component_count(adjacency: dict[str, set[str]]) -> int:
     return components
 
 
-def _rim_adjacent_faces(model: PartModel, index: EdgeIndex, rim_sigs, band: set[str]) -> list[str]:
+def _rim_adjacent_faces(index: EdgeIndex, rim_sigs, band: set[str]) -> list[str]:
     """Faces sharing at least one rim edge (by signature), excluding the band walls."""
     adjacent: set[str] = set()
     for sig in rim_sigs:
@@ -622,91 +630,22 @@ def match_inner_loop(model: PartModel, index: EdgeIndex, rim_sigs, exclude_face_
 
 
 # ---------------------------------------------------------------------------
-# Edge index
-# ---------------------------------------------------------------------------
-
-def build_edge_index(model: PartModel) -> EdgeIndex:
-    incidence: dict[str, set[str]] = {}
-    for face_id, face in model.faces.items():
-        for loop_id in face.loop_ids:
-            loop = model.loops.get(loop_id)
-            if loop is None:
-                continue
-            for edge_id in loop.edge_ids:
-                if edge_id in model.edges:
-                    incidence.setdefault(edge_id, set()).add(face_id)
-
-    duplicated: set[str] = set()
-    for loop in model.loops.values():
-        seen: set[str] = set()
-        for edge_id in loop.edge_ids:
-            if edge_id in seen:
-                duplicated.add(edge_id)
-            seen.add(edge_id)
-
-    edge_sig: dict[str, tuple] = {}
-    sig_to_edge_ids: dict[tuple, list[str]] = {}
-    for edge_id in sorted(model.edges):
-        sig = _edge_signature(model.edges[edge_id], model)
-        edge_sig[edge_id] = sig
-        sig_to_edge_ids.setdefault(sig, []).append(edge_id)
-
-    sig_incidence: dict[tuple, set[str]] = {}
-    for sig, edge_ids in sig_to_edge_ids.items():
-        faces: set[str] = set()
-        for edge_id in edge_ids:
-            faces.update(incidence.get(edge_id, ()))
-        sig_incidence[sig] = faces
-
-    self_seam_sigs: set[tuple] = set()
-    for sig, edge_ids in sig_to_edge_ids.items():
-        if len(sig_incidence[sig]) != 1:
-            continue
-        if all(model.edges[edge_id].is_seam or edge_id in duplicated for edge_id in edge_ids):
-            self_seam_sigs.add(sig)
-
-    return EdgeIndex(
-        edge_sig=edge_sig,
-        sig_to_edge_ids=sig_to_edge_ids,
-        sig_incidence=sig_incidence,
-        loop_duplicate_edges=duplicated,
-        self_seam_sigs=self_seam_sigs,
-    )
-
-
-def _edge_signature(edge, model: PartModel | None = None) -> tuple:
-    """Deterministic geometric signature: curve type + length + point cloud.
-
-    The point cloud is the parser's persisted ``sample_points`` when present,
-    otherwise the edge endpoint coordinates.  Two edges with the same
-    signature are geometrically coincident copies of one logical curve.
-    """
-    samples = [list(point) for point in getattr(edge, "sample_points", None) or []]
-    if not samples and model is not None:
-        samples = [
-            list(model.vertices[vertex_id].coordinates)
-            for vertex_id in getattr(edge, "vertex_ids", None) or []
-            if vertex_id in model.vertices
-        ]
-    return _signature_from_points(edge, samples)
-
-
-def _signature_from_points(edge, samples: list[list[float]]) -> tuple:
-    rounded = tuple(sorted(tuple(round(float(value), _SIGNATURE_ROUND) for value in point) for point in samples)) if samples else ()
-    curve_type = edge.curve_type.value if hasattr(edge.curve_type, "value") else str(edge.curve_type)
-    return (curve_type, round(float(edge.length), _SIGNATURE_ROUND), rounded)
-
-
-# ---------------------------------------------------------------------------
 # Graph helpers
 # ---------------------------------------------------------------------------
 
-def _closed_cycles(model: PartModel, index: EdgeIndex, sigs: list[tuple]) -> list[list[tuple]]:
+def _closed_cycles(
+    model: PartModel, index: EdgeIndex, sigs: list[tuple]
+) -> tuple[list[list[tuple]], bool]:
     """Enumerate simple closed cycles of the edge subgraph (over signatures).
 
     Vertices are merged by rounded coordinates (the parser already deduplicates
     vertices by OCCT hash, so this only guards against coincident duplicates).
     Self-loop edges (closed circle edges) are valid single-edge cycles.
+
+    Returns the cycles and whether the enumeration stopped at
+    ``_MAX_CYCLES_PER_ANCHOR``.  The caller needs the second half: a truncated
+    enumeration can make it name a reason ("rim not closed", "principal rim
+    count not two") that describes the budget rather than the geometry.
     """
     node_points: list[list[float]] = []
     node_index: dict[tuple, int] = {}
@@ -769,10 +708,5 @@ def _closed_cycles(model: PartModel, index: EdgeIndex, sigs: list[tuple]) -> lis
     for start in sorted(adjacency):
         _dfs(start, start, [], {start})
         if len(cycles) >= _MAX_CYCLES_PER_ANCHOR:
-            break
-    return cycles
-
-
-def face_sort_key(face_id: str) -> tuple[int, str]:
-    match = re.fullmatch(r"face_(\d+)", face_id)
-    return (int(match.group(1)), face_id) if match else (10**9, face_id)
+            return cycles, True
+    return cycles, False

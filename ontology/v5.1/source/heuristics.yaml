@@ -963,7 +963,7 @@ heuristics:
   grade: hard
   scope_en: single feature
   statement_en: Keep the hole depth-to-diameter ratio within the maximum L/D reachable by the available tools.
-  expression_page: derived_ratio_depth_to_diameter <= EXT.max_LD
+  expression_page: derived_ratio_depth_to_diameter <= EXT.max_length_to_diameter
   condition: derived_ratio_depth_to_diameter <= tool_magazine(machine).max_length_to_diameter
   threshold_value: null
   threshold_note_en: —

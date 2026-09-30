@@ -31,7 +31,7 @@ Network) for machining feature recognition on B-Rep solids.
 New pipeline code calls AAGNet **through an adapter only**:
 
 ```
-scripts/recognizers/aagnet_per_face.py  (or similar)
+src/occline/aagnet/per_face.py
 ```
 
 The adapter:
@@ -46,8 +46,8 @@ groups from instance segmentation) as the **final feature instance ownership**.
 
 In the new architecture, AAGNet provides only **per-face semantic evidence**
 (e.g., "face_3 is likely part of a blind_hole"). The decision of which specific
-faces belong to which feature instance is made by **gather rules** in
-`scripts/gather/rules/`.
+faces belong to which feature instance is made by the **v5.1 leaf-class
+recognisers** in `src/features/`.
 
 This means: AAGNet native feature groups → discarded at the adapter boundary.
 Only per-face logits / predicted labels are forwarded.

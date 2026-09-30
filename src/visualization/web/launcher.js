@@ -15,6 +15,7 @@ import { fetchParts, postRefresh, setupRefresh } from './refresh.js';
 import { createStats } from './stats.js';
 import { createSimilarity } from './similarity.js';
 import { currentLine, lineLabel, setupLineSwitch } from './line.js';
+import { reloadPage, renderRunBanner } from './runwatch.js';
 import {
   actionsCell,
   addFiles,
@@ -47,6 +48,7 @@ const state = {
   similarity: null,
   runId: null,
   partCount: 0,
+  indexNotices: [],      // what the run said about itself (schema, self-checks)
   line: currentLine(),
   // store side
   store: new Map(),      // partId -> api/parts row
@@ -86,6 +88,16 @@ async function boot() {
     onStatus,
     onDataChanged,
   });
+
+  // Audit hook, the same shape the part and compare pages already publish:
+  // read-only handles, no hidden behaviour.  The similarity panel is reached
+  // through it so its "a superseded ranking must not land" guard can be
+  // provoked from a script instead of hoped for (node 27G 6 #7).
+  window.tempLauncher = {
+    state,
+    get similarity() { return state.similarity; },
+    get line() { return state.line; },
+  };
 }
 
 /** (Re)load the viewer index; returns its run id. Safe to call repeatedly. */
@@ -107,44 +119,103 @@ async function loadIndex() {
   state.featureLabels = index.featureLabels || {};
   state.runId = index.runId;
   state.partCount = index.parts.length;
+  state.indexNotices = indexNotices(index);
   renderFooter();
-  $('run-line').title = `source directory: ${index.generatedFrom}`;
-  state.stats = createStats(state.statsRoot, index);
+  // loadIndex() runs again after every sync that changes the run id, so the
+  // statistics view is updated in place rather than replaced: a second
+  // instance over the same mount leaks the first one and its whole index.
+  if (state.stats) state.stats.setIndex(index);
+  else state.stats = createStats(state.statsRoot, index);
   if (state.view === 'heuristics') state.stats.render();
   state.similarity.setParts(index.parts);
   return index.runId;
 }
 
-/** Run id, part count and the line whose results the page is showing. */
+// The prefix of every index schema this page knows how to read.  Not a
+// version comparison: the page renders whatever it is given and says so when
+// it does not recognise the shape, because refusing to draw a run is worse
+// than drawing it with a caveat.
+const INDEX_SCHEMA = 'v8.viewer_index.';
+
+/**
+ * What the run says about itself, in the run's own words.
+ *
+ * Both of these are written into the index and, until node 27, read by
+ * nobody: `checkFailures` went to the terminal only, and the daily way in is
+ * a browser, so a run whose own consistency check failed looked perfect on
+ * screen; `schemaVersion` was never compared, so an index written by an older
+ * pipeline rendered as if it were current, with missing fields quietly
+ * falling back to empty.
+ */
+function indexNotices(index) {
+  const notices = [];
+  const schema = index.schemaVersion;
+  if (!schema || !String(schema).startsWith(INDEX_SCHEMA)) {
+    notices.push({
+      text: 'unknown index format',
+      title: `this page reads ${INDEX_SCHEMA}*, the run says "${schema || 'nothing'}"`
+        + '\nshown anyway — anything this page cannot find is left empty',
+    });
+  }
+  const failures = index.checkFailures || [];
+  if (failures.length) {
+    notices.push({
+      text: `${failures.length} check failure(s)`,
+      title: failures.map(String).join('\n'),
+    });
+  }
+  return notices;
+}
+
+/**
+ * Run id, part count, the line whose results the page is showing, and
+ * anything the run said about itself.
+ *
+ * No path.  The footer used to carry the run's source directory in its
+ * tooltip, taken from the index's `generatedFrom` - a directory on the
+ * machine that produced the artifacts, which after a release export is not
+ * even the same computer as the one reading the page.  Whatever the index
+ * carries, none of it is printed here: the run id names the run, and the
+ * directory serving it is the one in the address bar.
+ */
 function renderFooter() {
+  const foot = $('run-line');
   if (state.runId) {
-    $('run-line').textContent = `${state.runId} · ${state.partCount} parts · ${lineLabel(state.line)}`;
+    foot.textContent = `${state.runId} · ${state.partCount} parts · ${lineLabel(state.line)}`;
+  }
+  for (const notice of state.indexNotices) {
+    const chip = document.createElement('span');
+    chip.className = 'foot-note';
+    chip.textContent = notice.text;
+    chip.title = notice.title;
+    foot.append(chip);
   }
 }
 
 /**
- * What the shown line knows about one part.  The open-source line built the
- * run, so its numbers are also the entry's own; every line's are in `lines`.
- * `null` counts render as an em dash — "no number from this line" is not
- * zero, and the NX line has no unclaimed-face audit at all.
+ * What the shown line knows about one part — read from that line's own block
+ * and from nowhere else.  The index also states the open-source line's numbers
+ * at the entry's top level, and reading those for the line called `occ` is how
+ * this used to work: a branch on the line's name to pick which field holds the
+ * number, which is the one thing display code may not do.  A third line would
+ * have walked silently into the other branch.
+ *
+ * `null` counts render as an em dash — "no number from this line" is not zero.
+ * `unclaimedRawCadFaceCount` is one today for every line: it is a per-line
+ * audit (which of the source STEP's faces no feature of *this* line claimed)
+ * and the index carries it only at the entry's top level, where it is the
+ * open-source line's answer with nothing in the data saying so.  Guessing
+ * which line it belongs to is worse than not printing it; the index carrying
+ * it per line is the fix, and that is a producer-side change.
  */
 function lineCounts(part) {
   const info = (part.lines && part.lines[state.line]) || null;
   const built = info && info.status === 'PASS';
-  if (state.line === 'occ') {
-    return {
-      featureCounts: part.featureCounts || {},
-      featureNodeCount: part.featureNodeCount,
-      relationEdgeCount: part.relationEdgeCount,
-      unclaimedRawCadFaceCount: part.unclaimedRawCadFaceCount,
-      producedAt: info ? info.producedAt : undefined,
-    };
-  }
   return {
     featureCounts: (built && info.featureCounts) || {},
     featureNodeCount: built ? info.nodeCount : null,
     relationEdgeCount: built ? info.edgeCount : null,
-    unclaimedRawCadFaceCount: null,
+    unclaimedRawCadFaceCount: built ? info.unclaimedRawCadFaceCount ?? null : null,
     producedAt: info ? info.producedAt : null,
   };
 }
@@ -213,11 +284,23 @@ function onStatus(status) {
 }
 
 async function onDataChanged() {
+  // The part list and the statistics are re-read here, so they are current
+  // again.  The similarity view is not: a ranking or a pair on screen was
+  // computed against the build that has just been replaced, and recomputing
+  // it under the reviewer would silently change an answer they are reading.
+  // The banner says which build the numbers came from and offers the reload
+  // (node 26 G-03; the same sentence the part and compare pages use).
+  const shownRun = state.runId;
   try {
     await loadIndex();
   } catch (error) {
     console.error(error);
     return;
+  }
+  if (shownRun && state.runId && shownRun !== state.runId) {
+    renderRunBanner($('run-banner'), {
+      shownRun, currentRun: state.runId, onReload: reloadPage,
+    });
   }
   await refreshStore();
   renderTypeFilter();
@@ -285,13 +368,11 @@ function allParts() {
   const extra = [];
   for (const [partId, row] of state.store) {
     if (known.has(partId)) continue;
+    // No `lines` block: every per-line count reads as "no number from this
+    // line", which is what a part the run has never indexed actually is.
     extra.push({
       partId,
       rawCadFaceCount: null,
-      featureNodeCount: null,
-      relationEdgeCount: null,
-      unclaimedRawCadFaceCount: null,
-      featureCounts: {},
       _storeOnly: true,
       _row: row,
     });
@@ -301,10 +382,10 @@ function allParts() {
 
 function sortValue(part, key) {
   if (key === 'producedAt') {
-    const counts = lineCounts(part);
-    if (counts.producedAt !== undefined) return counts.producedAt || '';
-    const row = state.store.get(part.partId);
-    return (row && row.producedAt) || '';
+    // "When was this part built" is a per-line question, so the answer comes
+    // from the line's own block; parts the line has no block for sort as the
+    // empty string and group together.
+    return lineCounts(part).producedAt || '';
   }
   if (key === 'storeState') return chipState(state.store.get(part.partId)) || '';
   if (key === 'featureNodeCount' || key === 'relationEdgeCount' || key === 'unclaimedRawCadFaceCount') {
@@ -313,10 +394,11 @@ function sortValue(part, key) {
   return part[key];
 }
 
-function visibleParts() {
+/** *all* is the list from allParts(), passed in so one render builds it once. */
+function visibleParts(all) {
   const needle = state.search.trim().toLowerCase();
 
-  const matched = allParts().filter((part) => {
+  const matched = all.filter((part) => {
     const featureCounts = lineCounts(part).featureCounts;
     for (const type of state.types) {
       if (!featureCounts[type]) return false;
@@ -347,10 +429,18 @@ function visibleParts() {
 // ---------------------------------------------------------------- rendering
 
 function render() {
-  const parts = visibleParts();
+  // Everything below reads the same two derived things - the whole list, and
+  // each row's counts for the shown line - and used to re-derive them: two
+  // allParts() calls building two Maps, and lineCounts() once per part per
+  // summary figure.  At nine parts that is nothing; this list is built for a
+  // corpus well past two hundred, where it is five passes over the corpus for
+  // one render.
+  const all = allParts();
+  const parts = visibleParts(all);
+  const countsOf = new Map(parts.map((part) => [part.partId, lineCounts(part)]));
   const rows = $('rows');
   rows.innerHTML = '';
-  const total = allParts().length;
+  const total = all.length;
 
   for (const part of parts) {
     const row = document.createElement('div');
@@ -359,7 +449,7 @@ function render() {
     const storeRow = state.store.get(part.partId) || null;
     const openable = !part._storeOnly;
     const href = 'viewer.html?part=' + encodeURIComponent(part.partId);
-    const counts = lineCounts(part);
+    const counts = countsOf.get(part.partId);
 
     const name = document.createElement(openable ? 'a' : 'span');
     name.className = 'col-name name';
@@ -399,9 +489,12 @@ function render() {
   const summary = $('list-summary');
   summary.hidden = parts.length === 0;
   if (parts.length) {
-    const sum = (key) => parts.reduce((total_, part) => total_ + (lineCounts(part)[key] || 0), 0);
+    const sum = (key) => parts.reduce(
+      (total_, part) => total_ + (countsOf.get(part.partId)[key] || 0), 0);
     const types = new Set();
-    for (const part of parts) for (const type of Object.keys(lineCounts(part).featureCounts)) types.add(type);
+    for (const part of parts) {
+      for (const type of Object.keys(countsOf.get(part.partId).featureCounts)) types.add(type);
+    }
     summary.innerHTML = '';
     for (const [value, label] of [
       [parts.length, parts.length === 1 ? 'part' : 'parts'],

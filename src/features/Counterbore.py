@@ -18,6 +18,8 @@ def recognize_and_build(
     component_nodes: list[FeatureNode] | None = None,
     start_index: int = 1,
     kernel=None,
+    ladder=None,
+    intervals=None,
     **_: Any,
 ) -> tuple[list[FeatureNode], set[str], dict[str, Any]]:
     """Resolve only from completed ThroughHole/BlindHole component nodes."""
@@ -29,5 +31,7 @@ def recognize_and_build(
         claimed_face_ids,
         start_index=start_index,
         kernel=kernel,
+        ladder=ladder,
+        intervals=intervals,
     )
     return resolution.nodes, resolution.claimed, resolution.diagnostics

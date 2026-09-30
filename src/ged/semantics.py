@@ -31,12 +31,26 @@ from typing import Any
 
 from ged.contract import attribute_policy, nx_policy, projection
 from ged.contract.representation import NX_V1, Representation, V5_1
-from ged.cost import node_cost, nx_type_matrix, type_matrix
+from ged.cost import edge_cost, node_cost, nx_type_matrix, type_matrix
 
 
 # Raise when representation or cost *code* changes without any table below
 # changing.  A table change needs no bump: it moves the hash on its own.
-EPOCH = 1
+#
+# 2 - node 27 phase 2, finding F-09: a LOCATED_ON edge whose two ends witness
+#     each other is now projected as one undirected edge with its direction
+#     left unstated, instead of being dropped.  Twelve nx edges that used to
+#     be absent are present, which moves the distance of every pair that
+#     touches them; no table changed, so nothing else would have said so.
+#     The occ representation's numbers are unaffected - it has no such edge -
+#     but EPOCH is shared, so its cache is rebuilt once and lands on the same
+#     distances.
+# 3 - node 28 D-1: the projection now emits its nodes in canonical order
+#     (class + active face ids + id) and its edges in the order of their ends,
+#     so an approximate solver's choice among equal-cost assignments no longer
+#     follows the ordinals the pipeline happened to issue.  Distances move on
+#     both sides without any table moving, which is again what EPOCH is for.
+EPOCH = 3
 
 
 def _canonical(value: Any) -> Any:
@@ -61,6 +75,10 @@ def _canonical(value: Any) -> Any:
 # Every table outside the eight weights whose value changes a distance.
 # This is the **v5.1** set, kept spelled out because these tables are written
 # by hand and each name here is a promise that somebody looked at it.
+# The promise is no longer only a promise: ``tests/test_node27_f.py`` walks
+# ``ged/cost`` and ``ged/contract`` for module-level constants and fails on
+# any that is neither reachable from a stamp below nor exempted by name with
+# a reason (node 26 F-01 was exactly a table nobody remembered to add).
 TABLES: dict[str, Any] = {
     # representation: what becomes a node, what is compared, how it is scaled
     "FAMILY_OF": attribute_policy.FAMILY_OF,
@@ -75,6 +93,14 @@ TABLES: dict[str, Any] = {
     "HOST_IMPLYING_RELATIONS": projection.HOST_IMPLYING_RELATIONS,
     "EDGE_METRICS": projection.EDGE_METRICS,
     "NORMAL_PARALLEL_TOL_DEG": projection.NORMAL_PARALLEL_TOL_DEG,
+    # representation: what an aggregate of the background layer is worth
+    "FIXED_BUDGET_SHARES": V5_1.fixed_budget_shares,
+    "FIXED_ATTRIBUTE_WEIGHTS": V5_1.fixed_attribute_weights,
+    # cost layer: what an edge costs to delete, insert or change
+    "EDGE_STATIC_BASE_WEIGHT": V5_1.static_edge_base_weight,
+    "EDGE_DEFAULT_BASE_WEIGHT": edge_cost.DEFAULT_BASE_WEIGHT,
+    "LABEL_MISMATCH_BASE": edge_cost.LABEL_MISMATCH_BASE,
+    "ATTRIBUTE_MISMATCH_BASE": edge_cost.ATTRIBUTE_MISMATCH_BASE,
     # cost layer, the parts the eight weights do not reach
     "SAME_LEAF": type_matrix.SAME_LEAF,
     "SAME_FAMILY": type_matrix.SAME_FAMILY,
@@ -116,6 +142,12 @@ NX_TABLES: dict[str, Any] = {
     "EDGE_METRICS": NX_V1.edge_metrics,
     "FIXED_BUDGET_SHARES": NX_V1.fixed_budget_shares,
     "FIXED_ATTRIBUTE_WEIGHTS": NX_V1.fixed_attribute_weights,
+    # what an edge costs on this side: the priced relations are nx_v1's own
+    # (DIRECT_ADJACENT is not among them), the three constants are shared.
+    "EDGE_STATIC_BASE_WEIGHT": NX_V1.static_edge_base_weight,
+    "EDGE_DEFAULT_BASE_WEIGHT": edge_cost.DEFAULT_BASE_WEIGHT,
+    "LABEL_MISMATCH_BASE": edge_cost.LABEL_MISMATCH_BASE,
+    "ATTRIBUTE_MISMATCH_BASE": edge_cost.ATTRIBUTE_MISMATCH_BASE,
     # cost layer: OVERRIDES is empty by decision (D8 = b), and its emptiness
     # is part of what a cached distance was computed under.
     "NX_OVERRIDES": nx_type_matrix.OVERRIDES,

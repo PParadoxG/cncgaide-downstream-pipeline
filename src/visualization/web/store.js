@@ -29,9 +29,13 @@ export function initialState() {
     // | {kind:'edge', edgeId} | {kind:'features', featureIds: [...]}
     selection: null,
     hover: null,
-    // Both filters are re-seeded from each part's own data on load; these are
-    // only what the page holds before the first part arrives.
-    hiddenTypes: new Set(['PlanarFace']),
+    // Both filters are re-seeded from each part's own data on load - the line
+    // states which of its classes are a background layer in
+    // `defaultHiddenFeatureTypes`, and both lines do - so these are only what
+    // the page holds in the moment before the first part arrives, when there
+    // is nothing on screen to hide.  A class name written here would be one
+    // line's vocabulary standing for both.
+    hiddenTypes: new Set(),
     visibleEdgeTypes: new Set(),
     isolate: false,
     showEdges: false,

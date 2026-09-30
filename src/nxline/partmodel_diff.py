@@ -70,9 +70,19 @@ def pair_faces(occ: PartModel, nx: PartModel) -> tuple[dict[str, str], list[str]
             continue
         matched[nx_id] = occ_id
         used_occ.add(occ_id)
-    unmatched_nx = sorted(set(nx_faces) - set(matched))
-    unmatched_occ = sorted(set(occ_faces) - used_occ)
+    # Numeric order, as the rest of the line sorts face ids (finding E-17).
+    unmatched_nx = sorted(set(nx_faces) - set(matched), key=_ordinal)
+    unmatched_occ = sorted(set(occ_faces) - used_occ, key=_ordinal)
     return matched, unmatched_nx, unmatched_occ
+
+
+def _ordinal(identifier: str) -> tuple[int, str]:
+    """The number in a ``face_<n>`` id.  Non-numeric ids sort last, by name.
+
+    A total order, so no tie is handed back to the set that produced it.
+    """
+    tail = identifier.rsplit("_", 1)[-1]
+    return (int(tail), identifier) if tail.isdigit() else (10 ** 9, identifier)
 
 
 def _angle(a, b) -> float | None:

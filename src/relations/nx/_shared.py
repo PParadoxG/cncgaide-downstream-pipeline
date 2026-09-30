@@ -37,10 +37,12 @@ still required to resolve to exactly one owner.
 
 from __future__ import annotations
 
+import math
+
 from tbox import nx_v1 as source
 from contract.kernel import DISTANCE_MEASURED
 from core.models import FeatureEdge, FeatureNode
-from features._shared.hole_topology import classify_rim_end, wall_rims
+from topology.hole_topology import classify_rim_end, wall_rims
 
 from relations._shared import (  # noqa: F401
     AXIS_LINE_TOL_MM,
@@ -99,6 +101,13 @@ LOCATED_SOURCE_FAMILIES = (
 # ~0.71).  0.75 sits between the steepest floor and the steepest wall the
 # corpus and the NX catalogue actually contain; these are face-classification
 # geometry, not process thresholds anyone tunes.
+#
+# The ontology says so too, since node 27: ``POCKET_CLEARANCE.nx_basis`` in
+# ``ontology/nx_v1/source/relations.yaml`` states that the side walls handed
+# to the kernel are picked at |cos| <= 0.75 and why that number is not in the
+# threshold table.  ``LATERAL_MAX_COS`` decides which faces a published
+# ``pocketClearance`` is measured between, so the number needed a home in the
+# only definition of the relation there is.
 FLOOR_MIN_COS = 0.75
 LATERAL_MAX_COS = 0.75
 
@@ -226,6 +235,45 @@ def _resolve_opening_boundaries(context, node: FeatureNode) -> list[dict]:
     return found
 
 
+#: Relative slack on the bounding-box lower bound below.  The box gap is a
+#: lower bound on the polyline distance in exact arithmetic and *not* in
+#: floating point: on the current corpus one pair (``slot_clearance_0012`` of
+#: ``084_818_012_solid_001``) has a bound one ULP above its own true distance,
+#: and a bare ``>`` comparison pruned away the pair that should have won - the
+#: distance came out the same, the published witness points did not.
+_BOX_PRUNE_SLACK = 1.0e-9
+
+
+def _polyline_box(points) -> tuple[list[float], list[float]] | None:
+    """The axis-aligned bounding box of one polyline, or ``None`` for no points."""
+    if not points:
+        return None
+    return ([min(point[index] for point in points) for index in range(3)],
+            [max(point[index] for point in points) for index in range(3)])
+
+
+def _box_gap(left, right) -> float:
+    """Distance between two axis-aligned boxes; zero when they overlap."""
+    total = 0.0
+    for index in range(3):
+        gap = max(left[0][index] - right[1][index], right[0][index] - left[1][index], 0.0)
+        total += gap * gap
+    return math.sqrt(total)
+
+
+def _cannot_beat(left_box, right_box, best: float) -> bool:
+    """Is this polyline pair already further apart than the best so far?
+
+    Only the smallest distance is kept and it is replaced on a strict ``<``,
+    so a pair whose *lower bound* already exceeds the current best could not
+    have replaced it and need not be measured.  A pair with no box is never
+    pruned - a refusal to bound is not a bound.
+    """
+    if left_box is None or right_box is None:
+        return False
+    return _box_gap(left_box, right_box) > best * (1.0 + _BOX_PRUNE_SLACK)
+
+
 def boundary_set_clearance(left: list[dict], right: list[dict]) -> tuple[float | None, dict]:
     """Shortest distance between two features' opening boundaries.
 
@@ -242,11 +290,22 @@ def boundary_set_clearance(left: list[dict], right: list[dict]) -> tuple[float |
     if not left or not right:
         details["status"] = "missing_opening_boundary"
         return None, details
+    # Boxed once per polyline, then pruned *inside* the same four loops.  The
+    # nesting order is load bearing: the winner is chosen on a strict ``<``,
+    # so which of several equally close pairs becomes the published witness
+    # depends on the order they are visited, and flattening the two outer
+    # loops moves that witness without moving the distance.
+    left_boxes = [[_polyline_box(line) for line in item["polylines"]] for item in left]
+    right_boxes = [[_polyline_box(line) for line in item["polylines"]] for item in right]
     best = None
-    for left_item in left:
-        for right_item in right:
-            for left_line in left_item["polylines"]:
-                for right_line in right_item["polylines"]:
+    for left_index, left_item in enumerate(left):
+        for right_index, right_item in enumerate(right):
+            for line_index, left_line in enumerate(left_item["polylines"]):
+                left_box = left_boxes[left_index][line_index]
+                for other_index, right_line in enumerate(right_item["polylines"]):
+                    if best is not None and _cannot_beat(
+                            left_box, right_boxes[right_index][other_index], best[0]):
+                        continue
                     distance, left_point, right_point = polyline_distance(left_line, right_line)
                     if distance is None:
                         continue
@@ -257,7 +316,8 @@ def boundary_set_clearance(left: list[dict], right: list[dict]) -> tuple[float |
         return None, details
     details["status"] = "measured"
     details["clearance"] = round(float(best[0]), 6)
-    details["witnessPoints"] = {"left": best[1], "right": best[2]}
+    details["nearestPointA"] = best[1]
+    details["nearestPointB"] = best[2]
     return round(float(best[0]), 6), details
 
 
@@ -270,7 +330,7 @@ def kernel_face_set_clearance(context, left_face_ids: list[str],
     refusal vocabulary — so a no-edge decision can be re-argued from the
     diagnostics alone.
     """
-    from features._shared.attributes import cad_face_ids
+    from topology.faces import cad_face_ids
 
     kernel = getattr(context, "kernel", None)
     details: dict = {
@@ -306,11 +366,24 @@ def kernel_face_set_clearance(context, left_face_ids: list[str],
     return value, details
 
 
-def _face_order(face_id: str) -> int:
+def _face_order(face_id: str) -> tuple[int, int, str]:
+    """A total order over face ids, numeric where the id carries a number.
+
+    Three published face lists are ordered by this key, and every one of them
+    is built as ``sorted(set(ids), key=_face_order)``.  A key that collapsed
+    every id it could not parse to one value therefore handed the tie back to
+    the iteration order of a set of strings, which is randomised per process -
+    and ``hostFaceId`` is picked as the first element of one of those lists,
+    on the path to ``artifactDigest``.  Ids that parse keep their numeric
+    order (the ``face_<n>`` scheme in use today parses in full, so the
+    published order is unchanged); the ones that do not sort after them by
+    their own text.
+    """
+    text = str(face_id)
     try:
-        return int(str(face_id).rsplit("_", 1)[-1])
+        return (0, int(text.rsplit("_", 1)[-1]), "")
     except ValueError:
-        return 0
+        return (1, 0, text)
 
 
 def cylindrical_walls(context, node: FeatureNode) -> list[str]:
@@ -346,8 +419,8 @@ def _cylinder_rim_openings(context, node: FeatureNode) -> list[_Opening]:
     """The open rims of every cylindrical wall the feature owns."""
     ends: list[tuple[str, float, list[str]]] = []
     for wall_id in cylindrical_walls(context, node):
-        for rim in wall_rims(context.model, wall_id):
-            end = classify_rim_end(context.model, wall_id, rim)
+        for rim in wall_rims(context.model, wall_id, context.signatures):
+            end = classify_rim_end(context.model, wall_id, rim, context.signatures)
             if end.kind != "open":
                 continue
             ends.append((wall_id, float(end.axis_position),

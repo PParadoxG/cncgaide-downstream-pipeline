@@ -17,6 +17,7 @@ returns the contract's named refusals rather than guessing.
 from __future__ import annotations
 
 import math
+import sys
 
 from contract.kernel import (
     DISTANCE_MEASURED,
@@ -253,6 +254,7 @@ class NxKernelServices(KernelServices):
             pass
         facet_model = uf.Facet.FacetSolid(self._body.Tag, parameters)
         meshes: list[FaceMesh] = []
+        oversized_facets = 0
         for cad_id, face in enumerate(self._cad_faces):
             flat_positions: list[float] = []
             flat_normals: list[float] = []
@@ -276,6 +278,15 @@ class NxKernelServices(KernelServices):
                     continue
                 if vertex_count < 3:
                     continue
+                if vertex_count > 3:
+                    # The same guard the area reader carries (finding E-08):
+                    # emitting the first three corners of a quadrangle draws
+                    # half of it and calls that the face.  NX 2506 returns
+                    # only triangles here - AskMaxFacetVerts is 3 - so this
+                    # counts nothing today; when it does, the count travels
+                    # with the mesh rather than the half-facet.
+                    oversized_facets += 1
+                    continue
                 base = len(flat_positions) // 3
                 for corner in range(3):
                     flat_positions.extend(float(v) for v in positions[corner])
@@ -288,6 +299,13 @@ class NxKernelServices(KernelServices):
                 indices=indices,
                 edge_segments=self._edge_segments(cad_id, edge_deflection),
             ))
+        if oversized_facets:
+            # Said out loud on the stream the refresh already watches: a mesh
+            # that is missing part of a face must not look like a face that
+            # small.  Nothing on this install reaches it (E-08).
+            print("nx tessellate: %d facet(s) with more than three vertices were not "
+                  "drawn; this reader emits triangles only" % oversized_facets,
+                  file=sys.stderr)
         return meshes
 
     def _edge_segments(self, cad_id: int, deflection: float) -> list[float]:

@@ -27,10 +27,21 @@ from occline.parse.traversal import iter_edges
 
 
 def bounding_box(shape) -> list[float]:
-    """``[xmin, ymin, zmin, xmax, ymax, zmax]`` of the whole shape."""
+    """``[xmin, ymin, zmin, xmax, ymax, zmax]`` of the whole shape's geometry.
+
+    ``useTriangulation`` is off on purpose.  With it on, ``Add`` measures the
+    triangulation when the shape has one, so the same shape answered a
+    different box before and after :func:`tessellate` meshed it in place - and
+    the only reason the viewer got the right one was that it happens to ask
+    for the bounds on the line above the one that meshes.  A contract that
+    reads "the box of the whole solid" must not depend on when it is asked.
+    Measured over the corpus: the exact-geometry box equals the triangulated
+    one on all nine parts *before* meshing, so this changes no stored value;
+    what it changes is that the answer stops moving afterwards.
+    """
     box = Bnd_Box()
     box.SetGap(0.0)
-    brepbndlib.Add(shape, box)
+    brepbndlib.Add(shape, box, False)
     xmin, ymin, zmin, xmax, ymax, zmax = box.Get()
     return [float(xmin), float(ymin), float(zmin), float(xmax), float(ymax), float(zmax)]
 

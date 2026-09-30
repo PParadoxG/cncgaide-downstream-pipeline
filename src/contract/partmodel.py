@@ -150,6 +150,14 @@ class PartMetadata:
     # occline: every model stored before the field existed was OCC-parsed, and
     # the OCC line deliberately does not write it so its stored bytes stand.
     geometry_provider: str = ""
+    # The length unit the *source file* declares, in its own words ("MILLI
+    # METRE", "INCH"), not the unit this model's numbers are in.  Every length
+    # in a PartModel is millimetres - the OCC line pins the conversion and
+    # asserts it on every load (node 27B B-11), and the NX line reports what
+    # NX hands over - so this field is provenance, not a scale factor, and
+    # nothing computes with it.  Empty means the file did not say, said more
+    # than one thing, or the line that filled the model cannot ask.
+    length_unit: str = ""
 
 
 @dataclass

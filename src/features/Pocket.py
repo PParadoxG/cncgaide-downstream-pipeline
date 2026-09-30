@@ -106,6 +106,7 @@ from features._shared.band_frame import (
     ordered_rim_loop,
 )
 from features._shared.closed_wall_band import (
+    EdgeIndex,
     WallBandAnalysis,
     WallBandCandidate,
     build_edge_index,
@@ -143,10 +144,13 @@ def recognize_and_build(
     transition: TransitionEvidence,
     kernel: Any | None = None,
     start_index: int = 1,
+    edge_index: EdgeIndex | None = None,
 ) -> tuple[list[FeatureNode], set[str], dict[str, Any]]:
     """Register a Pocket for every CONVEX-in / CONCAVE-out side-wall band."""
-    claimed = claimed_face_ids if claimed_face_ids is not None else set()
-    index = build_edge_index(model)
+    claimed = set(claimed_face_ids or ())
+    # The orchestrator builds one index per part and hands it down; building
+    # our own is the standalone-call path, not the production one.
+    index = edge_index if edge_index is not None else build_edge_index(model)
     classifier = SolidPointClassifier(kernel)
 
     nodes: list[FeatureNode] = []
@@ -257,7 +261,7 @@ def _build_node(
     footprints: list[RimFootprint],
     feature_type: str,
 ) -> FeatureNode:
-    bottom = _bottom_analysis(model, kernel, frame, floor)
+    bottom = _bottom_analysis(model, frame, floor)
     # Both principal rims: the corner properties are minima over the whole
     # cavity, while min_width stays an *opening* measurement and reads rim_a.
     width = _min_width(footprints[0])
@@ -359,7 +363,7 @@ def _build_node(
 # Bottom region: type, and a single fixed depth when one exists
 # ---------------------------------------------------------------------------
 
-def _bottom_analysis(model: PartModel, kernel, frame: BandFrame, floor: list[str]) -> dict[str, Any]:
+def _bottom_analysis(model: PartModel, frame: BandFrame, floor: list[str]) -> dict[str, Any]:
     """Classify the bottom region and derive a depth only if it is unique.
 
     Reliability comes first: every terminal face must actually face back

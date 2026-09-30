@@ -37,21 +37,28 @@ import traceback
 
 
 class _NoOcc:
-    """Meta-path blocker: the full-NX process may never import OCC."""
+    """Meta-path blocker: the full-NX process may never import OCC.
 
-    def find_module(self, name, path=None):
-        return self if name == "OCC" or name.startswith("OCC.") else None
+    ``find_spec`` is the whole protocol: NX 2506 runs Python 3.12, which
+    removed the ``find_module`` / ``load_module`` finder methods this class
+    used to carry alongside it (node 26E finding E-13).  They were never
+    called there, and code that looks like it is guarding something while
+    being unreachable is worse than one method fewer.
+    """
 
     def find_spec(self, name, path=None, target=None):
         if name == "OCC" or name.startswith("OCC."):
             raise ImportError("the full-NX assembly forbids importing " + name)
         return None
 
-    def load_module(self, name):
-        raise ImportError("the full-NX assembly forbids importing " + name)
-
 
 sys.meta_path.insert(0, _NoOcc())
+
+
+def _occ_modules():
+    """Which OCC modules made it into ``sys.modules`` - the blocker's receipt."""
+    return sorted(name for name in sys.modules
+                  if name == "OCC" or name.startswith("OCC."))
 
 # ``run_journal.exe`` ignores PYTHONPATH entirely (probe: sys.path is the
 # script directory plus NX's own trees), so the composition root wires its
@@ -69,6 +76,7 @@ import NXOpen.UF  # noqa: E402
 def process_part(session, uf, job, root, tag, first_part, environment):
     from collections import Counter
 
+    from contract import refusals
     from contract.partmodel_json import save_json
     from heuristics import outcome_counts, run_heuristics
     from heuristics.nx._shared import NxHeuristicContext
@@ -86,7 +94,7 @@ def process_part(session, uf, job, root, tag, first_part, environment):
     from visualization.viewer_data import build_part_viewer_artifacts
 
     part_id = job["partId"]
-    summary = {"partId": part_id, "status": "success"}
+    summary = {"partId": part_id, "status": "success", "runToken": job.get("runToken")}
     work = None
     try:
         part, _ = session.Parts.OpenActiveDisplay(
@@ -96,10 +104,24 @@ def process_part(session, uf, job, root, tag, first_part, environment):
             session.CreateCamSession()
             try:
                 session.CAMSession.SpecifyConfiguration("${UGII_CAM_CONFIG_DIR}cam_general")
-            except Exception:
-                pass
+            except Exception as error:
+                # The recipe claims a CAM configuration.  If it did not take,
+                # that is a fact about this batch's data and has to be
+                # readable, not a difference nobody can see.
+                summary["camConfigurationProblem"] = "%s: %s" % (
+                    type(error).__name__, error)
         bodies = [b for b in work.Bodies]
-        body = bodies[0]
+        solids = [candidate for candidate in bodies if candidate.IsSolidBody]
+        if len(solids) > 1:
+            # Node 27 ruling: a multi-body part is refused whole, in the same
+            # words on both lines.  Building the first body and saying nothing
+            # would publish a part that quietly lost the rest of its geometry.
+            summary["status"] = "error"
+            summary["error"] = refusals.multi_body_unsupported(len(solids))
+            summary["bodyCount"] = len(solids)
+            summary["occModules"] = _occ_modules()
+            return summary
+        body = solids[0] if solids else bodies[0]
         paths = mirror_part_paths(part_paths(root, tag, part_id, LINE_NX), job["outDir"])
         paths["root"].mkdir(parents=True, exist_ok=True)
 
@@ -107,7 +129,8 @@ def process_part(session, uf, job, root, tag, first_part, environment):
         model, cad_faces = build_partmodel(
             uf, work, body,
             source_file=os.path.basename(job.get("sourceStep", job["prt"])),
-            part_name=part_id)
+            part_name=part_id,
+            part_units_enum=getattr(NXOpen.BasePart, "Units", None))
         save_json(model, str(paths["partmodel"]))
         face_id_by_tag = {face.Tag: f"face_{index}" for index, face in enumerate(cad_faces)}
 
@@ -144,19 +167,22 @@ def process_part(session, uf, job, root, tag, first_part, environment):
             "edges": [edge.to_dict() for edge in edges],
             "diagnostics": diagnostics,
         }
-        paths["result"].write_text(json.dumps(result, indent=2, ensure_ascii=False), encoding="utf-8")
+        paths["result"].write_text(json.dumps(result, ensure_ascii=False,
+                                              separators=(",", ":")),
+                                   encoding="utf-8", newline="")
         heuristics_payload, heuristic_summary = run_heuristics(
             model, nodes, edges, relation_diagnostics=relation_diagnostics,
             registry=NxHeuristicRegistry, context_factory=NxHeuristicContext)
         paths["heuristics"].write_text(
-            json.dumps({"partId": part_id, **heuristics_payload}, indent=1, ensure_ascii=False),
-            encoding="utf-8")
+            json.dumps({"partId": part_id, **heuristics_payload},
+                       ensure_ascii=False, separators=(",", ":")),
+            encoding="utf-8", newline="")
 
         id_map = build_id_map(part_id, model, nodes)
         save_id_map(id_map, paths["id_map"])
         palette = load_palette(root)
         graph_view = build_graph_view(part_id, result, id_map, palette,
-                                      job.get("sourceStep", ""), tag)
+                                      job.get("sourceStep", ""))
         save_graph_artifacts(graph_view, paths)
         counts = Counter(node.featureType for node in nodes)
         claimed = {face_id for node in nodes for face_id in node.partmodelFaceIds}
@@ -170,7 +196,11 @@ def process_part(session, uf, job, root, tag, first_part, environment):
         summary["entry"] = {
             "partId": part_id,
             "sourceStep": job.get("sourceStep"),
-            "sourceStepAbs": job.get("sourceStepAbs"),
+            # No ``sourceStepAbs``: the job file has never carried one, so the
+            # key was null in every record ever written (node 26E E-14, node
+            # 26P P-08).  The store writes the absolute path at the record's
+            # top level, which is where its only reader looks, and a machine
+            # path has no business in ``runs/<tag>/nx/`` either.
             "faceCount": len(model.faces),
             "claimedFaceCount": len(claimed),
             "nodeCount": len(nodes),
@@ -194,23 +224,52 @@ def process_part(session, uf, job, root, tag, first_part, environment):
             pass
     # Zero OCCT is enforced by the import blocker above; recording what did
     # enter sys.modules is how the run proves it rather than promising it.
-    summary["occModules"] = sorted(
-        name for name in sys.modules if name == "OCC" or name.startswith("OCC."))
+    summary["occModules"] = _occ_modules()
     return summary
 
 
-def describe_environment():
+def describe_environment(session=None):
     """What about this machine could change what NX says.
 
     The interface language is here because ``TypeDisplayName`` *is* an
     interface string: run this on a Chinese NX and every label in the store
     silently turns Chinese while the ``Type`` keys stay put.  Recording it is
     what lets a reader of the artifacts tell which happened.
+
+    ``nxVersion`` used to read ``os.environ["UGII_VERSION"]`` and was
+    therefore always empty: ``run_journal.exe`` does not put that variable in
+    the OS environment, and NX keeps its own table (finding E-06, measured on
+    this machine: ``os.environ`` says nothing, NX says ``v2506``).  Two
+    answers now, both from NX itself and both named for what they are - the
+    release number, which is documented, versioned and needs no licence, and
+    NX's own reading of the variable.  Missing when there is no session,
+    because a value that is not there must not read as an empty release.
     """
-    return {
-        "ugiiLang": os.environ.get("UGII_LANG") or "",
-        "nxVersion": os.environ.get("UGII_VERSION") or "",
+    environment = {
+        "ugiiLang": _nx_environment(session, "UGII_LANG") or os.environ.get("UGII_LANG") or "",
+        "nxVersion": _nx_environment(session, "UGII_VERSION") or "",
+        "nxReleaseNumber": "",
     }
+    if session is not None:
+        try:
+            environment["nxReleaseNumber"] = str(session.ReleaseNumber or "")
+        except Exception as error:  # noqa: BLE001 - a named gap, never a guess
+            environment["nxReleaseNumberError"] = "%s: %s" % (type(error).__name__, error)
+    return environment
+
+
+def _nx_environment(session, name):
+    """One NX environment variable, as NX itself reads it.
+
+    ``run_journal.exe`` starts with an OS environment that does not carry
+    every ``UGII_*`` variable NX has; ``GetEnvironmentVariableValue`` asks NX.
+    """
+    if session is None:
+        return ""
+    try:
+        return str(session.GetEnvironmentVariableValue(name) or "")
+    except Exception:  # noqa: BLE001 - the caller falls back and says nothing false
+        return ""
 
 
 def main():
@@ -221,15 +280,30 @@ def main():
 
     session = NXOpen.Session.GetSession()
     uf = NXOpen.UF.UFSession.GetUFSession()
-    environment = describe_environment()
+    environment = describe_environment(session)
 
     for index, job in enumerate(jobfile["parts"]):
         print("[%d/%d] %s" % (index + 1, len(jobfile["parts"]), job["partId"]))
         summary = process_part(session, uf, job, root, tag, index == 0, environment)
         out_path = job["summary"]
         os.makedirs(os.path.dirname(out_path), exist_ok=True)
+        # No ``default=str``: a summary that cannot be serialised is a bug in
+        # what was put into it, and stringifying it hands the driver a
+        # sentence where it expected a structure (node 26E finding E-15).
+        # It is named instead, and the batch carries on to the next part.
+        try:
+            payload = json.dumps(summary, indent=1, ensure_ascii=False)
+        except (TypeError, ValueError) as error:
+            summary = {
+                "partId": job["partId"],
+                "status": "error",
+                "runToken": job.get("runToken"),
+                "error": "the journal could not serialise this part's summary: %s: %s"
+                         % (type(error).__name__, error),
+            }
+            payload = json.dumps(summary, indent=1, ensure_ascii=False)
         with open(out_path, "w", encoding="utf-8") as handle:
-            json.dump(summary, handle, indent=1, ensure_ascii=False, default=str)
+            handle.write(payload)
         print("  ->", summary["status"],
               "occModules=%d" % len(summary.get("occModules", [])))
     print("journal_fullnx done")

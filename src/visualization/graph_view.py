@@ -14,9 +14,16 @@ def build_graph_view(
     id_map: dict,
     palette: dict,
     source_step: str,
-    output_tag: str,
 ) -> dict:
-    """Build display-only graph data from canonical nodes and the ID map."""
+    """Build display-only graph data from canonical nodes and the ID map.
+
+    No ``outputTag``.  It named the run this file happens to sit in, and this
+    file is hashed into the line's artifactDigest, so the digest answered
+    "which tag was this built under" as well as "did the result change" - the
+    two questions it exists to keep apart (finding F-14 / P-06).  The tag is
+    still stated at run level, in the manifest and in viewer_index.json, which
+    is where the page reads it.
+    """
     display_mapping = id_map.get("displayFaceMapping", {})
     nodes = []
     for node in result.get("nodes", []):
@@ -86,7 +93,6 @@ def build_graph_view(
         "schemaVersion": "v8.graph_view.v1",
         "partId": part_id,
         "sourceStep": source_step,
-        "outputTag": output_tag,
         "nodes": nodes,
         "edges": edges,
     }
@@ -155,5 +161,14 @@ def _evidence_face_refs(evidence: dict, partmodel_to_display: dict, display_mapp
 
 
 def save_graph_artifacts(graph_view: dict, part_paths: dict[str, Path]) -> None:
-    """Write the graph view.  Data only — the viewer is a separate static page."""
-    part_paths["graph_view"].write_text(json.dumps(graph_view, indent=2, ensure_ascii=False), encoding="utf-8")
+    """Write the graph view.  Data only - the viewer is a separate static page.
+
+    Written compactly, and with the newlines the JSON itself carries (none).
+    ``artifactDigest`` parses a JSON artifact before hashing it, so how it is
+    laid out is not part of what the digest answers; what it is part of is
+    40% of this run directory (node 26 FP-1).  A human who wants it laid out
+    has ``python -m json.tool``.
+    """
+    part_paths["graph_view"].write_text(
+        json.dumps(graph_view, ensure_ascii=False, separators=(",", ":")),
+        encoding="utf-8", newline="")

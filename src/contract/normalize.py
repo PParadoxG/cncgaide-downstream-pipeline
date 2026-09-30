@@ -14,8 +14,6 @@ disappear.  If the surviving boundary cannot be reconstructed into closed
 loops, the merge is conservatively skipped and the model is left untouched.
 """
 
-import copy
-import logging
 import math
 import re
 
@@ -37,7 +35,6 @@ def _union_bboxes(left: dict | None, right: dict | None) -> dict | None:
         "max": [max(float(left_max[index]), float(right_max[index])) for index in range(3)],
     }
 
-logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Tolerance constants (from CLAUDE.md)
@@ -73,7 +70,21 @@ def _point_key(params: dict) -> list[float] | None:
     return params.get("axis_location") or params.get("apex")
 
 
-def _axis_line_match(p1: dict, p2: dict) -> bool:
+def _axis_line_match(p1: dict, p2: dict, *, same_point: bool = False) -> bool:
+    """Do the two surfaces sit on the same axis line?
+
+    Lateral offset only, by default: a cylinder's ``axis_location`` is any
+    point on its axis, so sliding it along the axis still describes the same
+    line and the same cylinder.
+
+    ``same_point`` additionally requires the two reference points to coincide
+    *along* the axis, at the same tolerance.  A cone's reference point is its
+    apex, which is not free to slide: two cones with the same half angle on
+    one axis but with apexes apart are two different cones - a countersink and
+    the chamfer above it, say - and merging them would fuse them into one face
+    (node 27B §5 #3).  A surface whose reference point the parser could not
+    read is not made to fail this check; it never had a point to compare.
+    """
     ax1 = p1.get("axis_direction", [0.0, 0.0, 1.0])
     ax2 = p2.get("axis_direction", [0.0, 0.0, 1.0])
     if _axis_angle_between(ax1, ax2) >= _AXIS_ANGLE_TOL:
@@ -94,6 +105,8 @@ def _axis_line_match(p1: dict, p2: dict) -> bool:
         + (v[1] - v_dot_d * dy) ** 2
         + (v[2] - v_dot_d * dz) ** 2
     )
+    if same_point and abs(v_dot_d) >= _AXIS_DIST_TOL:
+        return False
     return perp < _AXIS_DIST_TOL
 
 
@@ -108,9 +121,21 @@ def _params_match(st: SurfaceType, p1: dict, p2: dict) -> bool:
     +-------------+-------------------------------------+
     | PLANE       | ``normal`` angle < 1e-4 rad         |
     +-------------+-------------------------------------+
-    | CONE        | ``radius`` / ``semi_angle`` / axis  |
+    | CONE        | ``semi_angle`` < 1e-4 rad, axis     |
+    |             | *and* apex, including along the axis|
+    +-------------+-------------------------------------+
     | other       | always ``False`` (skip)             |
     +-------------+-------------------------------------+
+
+    A cone has no ``radius`` parameter on either line - it is described by its
+    half angle and its apex - so the half angle is what stands in for the
+    cylinder's radius check, at the same tolerance the function already uses
+    for every other angle.  A cone whose half angle is missing does not match:
+    merging two fragments on the strength of a shared axis alone would fuse a
+    countersink into the chamfer above it.  For the same reason the apex has
+    to match *along* the axis as well, not only across it: the cylinder's
+    reference point may slide along its own axis and still be the same
+    cylinder, the cone's apex may not.
     """
     if st == SurfaceType.CYLINDER:
         r1 = p1.get("radius", 0.0)
@@ -120,7 +145,13 @@ def _params_match(st: SurfaceType, p1: dict, p2: dict) -> bool:
         return _axis_line_match(p1, p2)
 
     if st == SurfaceType.CONE:
-        return _axis_line_match(p1, p2)
+        a1 = p1.get("semi_angle")
+        a2 = p2.get("semi_angle")
+        if a1 is None or a2 is None:
+            return False
+        if abs(float(a1) - float(a2)) >= _AXIS_ANGLE_TOL:
+            return False
+        return _axis_line_match(p1, p2, same_point=True)
 
     if st == SurfaceType.PLANE:
         n1 = p1.get("normal", [0.0, 0.0, 1.0])
@@ -201,9 +232,17 @@ def _union_axial_extents(keeper: FaceData, removed: FaceData) -> None:
 
 
 def normalize_seam_faces(model: PartModel) -> PartModel:
-    """Detect and merge faces split by seam edges, returning a new ``PartModel``.
+    """Detect and merge faces split by seam edges, in place.
 
-    The original *model* is never modified — a deep copy is made first.
+    **This function consumes its argument.**  It rewrites *model* and returns
+    the very same object; the caller must treat the pre-merge model as gone
+    the moment the call is made.  Both production call sites
+    (``occline.parse.process_step_file`` and ``nxline.partmodel``) already
+    write ``model = normalize_seam_faces(model)`` and drop the pre-merge
+    object, and a caller that does want to keep it can pass
+    ``copy.deepcopy(model)`` itself.  The deep copy this function used to make
+    unconditionally was 79% of the pass (70,052 ``deepcopy`` calls on a
+    119-face part) and every byte of it was thrown away.
 
     **Merge conditions**:
 
@@ -234,8 +273,6 @@ def normalize_seam_faces(model: PartModel) -> PartModel:
     - Log every merge (and every conservatively skipped merge) to
       ``normalization_log``.
     """
-    model = copy.deepcopy(model)
-
     # ---- index: face_id -> {adjacent_face_id: shared_edge_id} ---------------
     def _build_adj_index() -> dict[str, dict[str, str]]:
         idx: dict[str, dict[str, str]] = {}
@@ -254,22 +291,31 @@ def normalize_seam_faces(model: PartModel) -> PartModel:
         merged_any = False
 
         face_ids = list(model.faces.keys())
+        position = {fid: index for index, fid in enumerate(face_ids)}
         for i in range(len(face_ids)):
             fid_a = face_ids[i]
             if fid_a not in model.faces:
                 continue
             face_a = model.faces[fid_a]
 
-            for j in range(i + 1, len(face_ids)):
-                fid_b = face_ids[j]
+            # --- condition 1: mutually adjacent ------------------------------
+            # Walking all of ``face_ids[i+1:]`` only to reject everything that
+            # is not a neighbour is what made this pass quadratic in the face
+            # count *on every restart*, and it restarts after every merge.  The
+            # neighbours are walked instead, in the order the full scan would
+            # have reached them, so the sequence of pairs that get past this
+            # condition - and therefore the merge order, which the merge result
+            # depends on - is exactly the same sequence as before.
+            a_adj = adj_index.get(fid_a, {})
+            later_neighbours = sorted(
+                (fid for fid in a_adj if position.get(fid, -1) > i),
+                key=position.__getitem__,
+            )
+            for fid_b in later_neighbours:
                 if fid_b not in model.faces:
                     continue
                 face_b = model.faces[fid_b]
 
-                # --- condition 1: mutually adjacent --------------------------
-                a_adj = adj_index.get(fid_a, {})
-                if fid_b not in a_adj:
-                    continue
                 b_adj = adj_index.get(fid_b, {})
                 if fid_a not in b_adj:
                     continue
@@ -380,7 +426,12 @@ def _merge_faces(
     skip logging so each skipped pair is recorded only once.
     """
     # ---- 0. defensive: a seam edge must never be referenced by a third face
-    for se_id in seam_set:
+    # Sorted, because the first offender found becomes the skip message, and
+    # Python randomises the hash of a string per process: the same conservative
+    # skip could otherwise be logged with a different edge id on two runs of
+    # the same input (27B leftover 2).  No instance on this corpus - the corpus
+    # skips nothing here - which is exactly why it was worth closing.
+    for se_id in sorted(seam_set):
         for fid, face in model.faces.items():
             if fid in (keeper_id, removed_id):
                 continue
@@ -448,11 +499,15 @@ def _merge_faces(
     }
 
     # ---- 4. remove internal seam edges from model and shells ---------------
+    # ``list.remove`` takes the first occurrence only, so a shell that listed
+    # one edge several times kept the rest as ids of edges the model no longer
+    # has - 215 dangling ids on this corpus (finding B-02).  Filtering is
+    # immune to the repetition whether or not the parser still produces it.
     for se_id in seam_set:
         model.edges.pop(se_id, None)
-        for shell in model.shells:
-            if se_id in shell.edge_ids:
-                shell.edge_ids.remove(se_id)
+    for shell in model.shells:
+        if any(eid in seam_set for eid in shell.edge_ids):
+            shell.edge_ids = [eid for eid in shell.edge_ids if eid not in seam_set]
 
     # ---- 5. rebuild keeper loops -------------------------------------------
     new_loop_ids: list[str] = []

@@ -109,12 +109,48 @@ def ensure_part_paths(project_root: str | Path, output_tag: str, part_id: str, l
 
 
 def project_relative(project_root: str | Path, path: str | Path) -> str:
+    """One file's location as the *project* names it, e.g. ``inputs\\Part_6.STEP``.
+
+    ``sourceStep`` is written into ``result.json``, ``graph_view.json`` and
+    ``view.json``, all of which are hashed into the line's artifact digest, so
+    an absolute path here makes the digest answer "where is this checkout" as
+    well as "did the result change" - and ``--input`` pointing outside the
+    project is a documented, ordinary thing to do.  Falls back to the file
+    name for exactly the reason :func:`run_relative` does, and never to an
+    absolute path; :func:`project_relative_gap` is how a caller learns that
+    the fall-back happened instead of having to compare strings.
+
+    Forward slashes, like :func:`run_relative`: this is a reference the
+    artifacts carry, not a path on any disk, and it used to go into a digest
+    as ``inputs\\Part_6.STEP`` on Windows and ``inputs/Part_6.STEP`` elsewhere
+    - two spellings of one fact, and one more thing the digest answered that
+    nobody asked it (finding B-14).
+    """
     root = Path(project_root).resolve()
     absolute = Path(path).resolve()
     try:
-        return str(absolute.relative_to(root))
+        return absolute.relative_to(root).as_posix()
     except ValueError:
-        return str(absolute)
+        return Path(path).name
+
+
+def project_relative_gap(project_root: str | Path, path: str | Path) -> str | None:
+    """Why :func:`project_relative` could only give a file name, or ``None``.
+
+    A named gap rather than a silent shortening: the reference an artifact
+    carries is then a file name that a reader knows is a file name, and the
+    absolute location stays in ``record.json`` (``sourceStepAbs``), which no
+    digest covers.
+    """
+    root = Path(project_root).resolve()
+    absolute = Path(path).resolve()
+    try:
+        absolute.relative_to(root)
+    except ValueError:
+        return ("the source file is outside the project root, so it is named "
+                "by file name only; its full location is in record.json "
+                "(sourceStepAbs)")
+    return None
 
 
 def run_relative(project_root: str | Path, output_tag: str, path: str | Path) -> str:

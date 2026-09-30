@@ -26,7 +26,7 @@ def recognize_and_build(
     start_index: int = 1,
     **_: Any,
 ) -> tuple[list[FeatureNode], set[str], dict[str, Any]]:
-    claimed = claimed_face_ids if claimed_face_ids is not None else set()
+    claimed = set(claimed_face_ids or ())
     nodes: list[FeatureNode] = []
     rejected: list[dict[str, Any]] = []
     for face_id in sorted(model.faces, key=face_sort_key):
@@ -37,6 +37,17 @@ def recognize_and_build(
             rejected.append({"faceId": face_id, "reason": "unsupported_or_unclassified_surface_is_not_proven_freeform", "surfaceType": face.surface_type.value})
             continue
         if face.surface_type not in _FREEFORM_TYPES:
+            # Finding C-03: this is the last pass to see the residue, so a face
+            # nobody claimed left no trace at all - the only evidence was
+            # claimedFaceCount != faceCount in the part record.  An analytic
+            # surface is never reclassified as freeform, and saying so here is
+            # what makes every active face reachable from some module's owned
+            # or rejected list.
+            rejected.append({
+                "faceId": face_id,
+                "reason": "analytic_surface_is_not_a_residual_freeform_candidate",
+                "surfaceType": face.surface_type.value,
+            })
             continue
         eligibility = _freeform_eligibility(face.surface_type, face.parameters)
         if not eligibility["eligible"]:
@@ -45,7 +56,7 @@ def recognize_and_build(
         if not isinstance(face.area, (int, float)) or float(face.area) <= 1.0e-9:
             rejected.append({"faceId": face_id, "reason": "invalid_or_zero_area_freeform_face"})
             continue
-        node = _build_node(model, face_id, kernel, start_index + len(nodes))
+        node = _build_node(model, face_id, start_index + len(nodes))
         nodes.append(node)
         claimed.add(face_id)
     diagnostics = {
@@ -72,7 +83,7 @@ def _freeform_eligibility(surface_type: SurfaceType, parameters: dict) -> dict[s
     return {"eligible": False, "reason": "unsupported_or_unclassified_surface_is_not_proven_freeform"}
 
 
-def _build_node(model: PartModel, face_id: str, kernel: Any | None, index: int) -> FeatureNode:
+def _build_node(model: PartModel, face_id: str, index: int) -> FeatureNode:
     face = model.faces[face_id]
     centroid = region_centroid(model, [face_id])
     area_valid = isinstance(face.area, (int, float)) and math.isfinite(float(face.area)) and float(face.area) > 1.0e-9

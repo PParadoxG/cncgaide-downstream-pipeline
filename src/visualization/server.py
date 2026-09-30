@@ -8,6 +8,14 @@ the page itself is source (tracked, one copy) while its data is a run artifact
     /data/index.json  -> runs/<tag>/viewer_index.json
     /data/<part>/...  -> runs/<tag>/parts/<part>/...
 
+Run data answers with a *weak* ETag naming the build it belongs to, and a
+request may demand that build with ``If-Match``; see ``_if_match_satisfied``.
+
+With ``GATHERSEED_VIEWER_DEBUG_DELAY`` set in the environment that starts the
+server, any request may add ``?delayMs=N`` to arrive late - the fixture the
+page's "an older answer must not land" guards are tested with.  Unset (the
+default, and every production start) the parameter is ignored.
+
 An HTTP origin is required: the page uses ES modules, ``fetch`` and a binary
 mesh buffer, none of which work from ``file://``.
 
@@ -63,6 +71,38 @@ REFRESH_HEADER = "X-Viewer-Refresh"
 
 ASSET_ROOT = Path(__file__).resolve().parent
 
+# What the ``/`` mount publishes: the pages themselves and the two directories
+# they load from, and nothing else.  The mount used to be the whole package, so
+# ``GET /server.py`` and ``GET /__pycache__/jobs.cpython-310.pyc`` answered 200
+# (node 26 F-15).  Harmless while everything in here is the page's own source;
+# a rule is what keeps it that way when it is not.
+#
+# A *rule* rather than a list of names, deliberately: the pages are whatever
+# ``.html`` files sit in this directory (``index.html``, ``viewer.html``,
+# ``compare.html`` today, and the next one somebody adds), and a list would
+# have to be edited in step with them - the kind of edit that is forgotten
+# until a page 404s.  Everything a page cannot be, a name cannot reach: the
+# server's own modules, ``__pycache__``, the retired ``legacy/`` viewer.
+ASSET_PAGE_SUFFIXES = (".html",)
+ASSET_DIRS = ("web", "vendor")
+
+# ``?delayMs=N`` makes one response arrive late, so a page's "an older answer
+# must not land after a newer one" guards can be provoked on purpose instead
+# of by luck (node 26 G-09, which was fixed with no way to test the timing).
+#
+# Off unless this environment variable is set when the server starts: a
+# server that can be told to be slow by a query string is a server anyone can
+# stall, and the production path must not gain even a branch it can be talked
+# into.  With the switch off the parameter is ignored exactly like any other
+# unknown one, which is the behaviour every existing test pins.
+DEBUG_DELAY_ENV = "GATHERSEED_VIEWER_DEBUG_DELAY"
+MAX_DEBUG_DELAY_MS = 5000
+
+# The most a JSON request body may declare.  The API's own bodies are a
+# handful of keys; the STEP upload endpoint reads raw bytes and has its own,
+# much larger, limit (``jobs.MAX_UPLOAD_BYTES``).
+MAX_JSON_BODY_BYTES = 64 * 1024
+
 CONTENT_TYPES = {
     ".html": "text/html; charset=utf-8",
     ".js": "text/javascript",
@@ -75,6 +115,10 @@ CONTENT_TYPES = {
 
 
 # ------------------------------------------------------------------ request
+
+class BodyTooLarge(ValueError):
+    """The request declared more body than the endpoint will read."""
+
 
 class Request:
     """What a handler may look at.  Built from the HTTP request, or by a test."""
@@ -98,9 +142,18 @@ class Request:
         chunk, self._body = self._body[:size], self._body[size:]
         return chunk
 
-    def json(self) -> dict:
+    def json(self, max_bytes: int = MAX_JSON_BODY_BYTES) -> dict:
+        """The JSON body, up to *max_bytes*.
+
+        The declared length is checked *before* anything is read: a JSON
+        endpoint here takes a few dozen bytes, and reading a declared 64 MiB
+        into memory because a fetch passed the wrong object is not a thing
+        this server should be able to be talked into (node 26 F-06).
+        """
         if self.content_length <= 0:
             return {}
+        if self.content_length > max_bytes:
+            raise BodyTooLarge(f"body larger than {max_bytes} bytes")
         raw = self.read(self.content_length)
         try:
             payload = json.loads(raw.decode("utf-8") or "{}")
@@ -126,6 +179,10 @@ class Api:
         self.input_path = input_path
         self._similarity: dict[str, object] = {}
         self._similarity_lock = threading.Lock()
+        self._rows: tuple[float, list[dict]] | None = None
+        self._rows_lock = threading.Lock()
+        self._run_id: tuple[float, str | None] | None = None
+        self._run_id_lock = threading.Lock()
 
     # -- reads --------------------------------------------------------------
 
@@ -153,6 +210,9 @@ class Api:
         try:
             body = request.json() if request.content_length else {}
             job = self.runner.submit("refresh", {"mode": body.get("mode") or "stale", "only": body.get("only") or []})
+            self.forget_part_rows()
+        except BodyTooLarge as error:
+            return 413, {"error": str(error)}
         except ValueError as error:
             return 400, {"error": str(error)}
         return 202, {"started": True, "detail": "queued", "jobId": job.jobId, **self.runner.status()}
@@ -191,6 +251,7 @@ class Api:
             tmp.unlink(missing_ok=True)
             return 500, {"error": f"could not store the file: {error}"}
         part_id = make_part_id(target, input_dir)
+        self.forget_part_rows()
         job = self.runner.submit("refresh", {"mode": "stale", "only": [part_id]})
         return 202, {"jobId": job.jobId, "partId": part_id, "file": str(target)}
 
@@ -199,6 +260,7 @@ class Api:
         if not valid_part_id(part_id):
             return 400, {"error": "invalid part id"}
         delete_source = request.query.get("source") in ("1", "true", "yes")
+        self.forget_part_rows()
         job = self.runner.submit("remove", {"partId": part_id, "deleteSource": delete_source})
         return 202, {"jobId": job.jobId, "partId": part_id, "deleteSource": delete_source}
 
@@ -312,13 +374,63 @@ class Api:
         except (OSError, ValueError):
             return None
 
+    #: How long the run id may be reused when stamping run data.  Every file
+    #: of a part carries the same weak ETag, so a page opening one part asks
+    #: for four of them in a burst; reading ``viewer_index.json`` once per
+    #: request would put an open() in front of every artifact byte.  Same
+    #: reasoning and same window as ``PART_ROWS_TTL`` (node 26 FP-5).
+    #: ``/api/status`` deliberately does *not* use this: ``dataRunId`` is the
+    #: field the page watches for drift, and it stays a live read.
+    DATA_RUN_ID_TTL = 0.5
+
+    def data_run_id(self) -> str | None:
+        """The run id on disk, re-read at most every ``DATA_RUN_ID_TTL``."""
+        now = time.monotonic()
+        with self._run_id_lock:
+            remembered = self._run_id
+        if remembered is not None and now - remembered[0] < self.DATA_RUN_ID_TTL:
+            return remembered[1]
+        value = self._data_run_id()
+        with self._run_id_lock:
+            self._run_id = (now, value)
+        return value
+
+    def forget_data_run_id(self) -> None:
+        """Drop the remembered run id: a build just replaced the run."""
+        with self._run_id_lock:
+            self._run_id = None
+
+    #: How long a store scan may be reused.  The page polls ``/api/status``
+    #: every two seconds and every poll used to walk the whole store twice
+    #: (once for the summary, once if ``/api/parts`` followed) - and a scan is
+    #: the most expensive read this server does (node 26 FP-5).  Short enough
+    #: that a build finishing is seen within the same poll the page would have
+    #: seen it in; the job state and ``dataRunId`` are read live either way.
+    PART_ROWS_TTL = 0.5
+
     def _part_rows(self) -> list[dict]:
         from store.sync import store_status
 
-        rows = store_status(self.project_root, self.output_tag, self.input_path)
+        now = time.monotonic()
+        with self._rows_lock:
+            remembered = self._rows
+        rows = None
+        if remembered is not None and now - remembered[0] < self.PART_ROWS_TTL:
+            rows = remembered[1]
+        if rows is None:
+            rows = store_status(self.project_root, self.output_tag, self.input_path)
+            with self._rows_lock:
+                self._rows = (now, rows)
+        # The queue moves faster than the store does, so it is never reused.
         for row in rows:
             row["job"] = self.runner.jobs_for(row["partId"]) if self.runner is not None else None
         return rows
+
+    def forget_part_rows(self) -> None:
+        """Drop the remembered scan: something just changed the store."""
+        with self._rows_lock:
+            self._rows = None
+        self.forget_data_run_id()
 
     def _store_summary(self) -> dict:
         try:
@@ -467,7 +579,28 @@ def dispatch(api: Api, request: Request) -> tuple[int, dict] | None:
 
 # ------------------------------------------------------------------ handler
 
-def _make_handler(run_root: Path, api: Api, presence: "_Presence"):
+def debug_delay_seconds(query: dict, allowed: bool) -> float:
+    """How long this request is asked to take, or 0.
+
+    Anything that is not a non-negative number is 0, and the ceiling is
+    ``MAX_DEBUG_DELAY_MS``: the switch exists to reorder two answers, not to
+    hold a connection open.
+    """
+    if not allowed:
+        return 0.0
+    raw = query.get("delayMs")
+    if raw is None:
+        return 0.0
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        return 0.0
+    if value != value or value <= 0:  # NaN or nothing to wait for
+        return 0.0
+    return min(value, MAX_DEBUG_DELAY_MS) / 1000.0
+
+
+def _make_handler(run_root: Path, api: Api, presence: "_Presence", allow_delay: bool = False):
     class Handler(http.server.BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.1"
 
@@ -481,10 +614,30 @@ def _make_handler(run_root: Path, api: Api, presence: "_Presence"):
             self._handle("DELETE")
 
         def _handle(self, method: str) -> None:
+            """Answer, whatever happens.
+
+            The one thing a handler may never do is fall through with no
+            response: ``socketserver`` then prints a traceback and closes the
+            connection, and the client sees nothing at all (node 26 F-05).
+            Only the exception's *type* goes down the wire - its message can
+            carry an absolute path (F-11).
+            """
+            try:
+                self._route(method)
+            except Exception as error:  # noqa: BLE001 - a status code, never a traceback
+                try:
+                    self._json(500, {"error": type(error).__name__})
+                except Exception:  # noqa: BLE001 - the socket is already gone
+                    self.close_connection = True
+
+        def _route(self, method: str) -> None:
             presence.touch()
             parsed = urlparse(self.path)
             path = unquote(parsed.path)
             query = {key: values[0] for key, values in parse_qs(parsed.query).items() if values}
+            delay = debug_delay_seconds(query, allow_delay)
+            if delay:
+                time.sleep(delay)
             length = int(self.headers.get("Content-Length") or 0)
             consumed = {"n": 0}
 
@@ -516,15 +669,55 @@ def _make_handler(run_root: Path, api: Api, presence: "_Presence"):
             if method != "GET":
                 self.send_error(404, "not found")
                 return
+            path_is_asset = not path.startswith("/data/") and path != "/data/index.json"
+            # Run data belongs to a build, and a page may insist on the build
+            # it started reading.  The precondition is judged before the file
+            # is looked for, the way HTTP judges preconditions: "not that
+            # build" is a better answer than "no such file", and it is the
+            # answer even when the file it asked for is gone because the new
+            # build no longer has it.
+            run_id = None if path_is_asset else api.data_run_id()
+            if not path_is_asset:
+                demanded = self.headers.get("If-Match")
+                if demanded is not None and not _if_match_satisfied(demanded, run_id):
+                    self._json(409, {
+                        "error": "the run on disk is not the one this request asked for",
+                        "runId": run_id,
+                    })
+                    return
             target = self._resolve(path)
             if target is None or not target.is_file():
                 self.send_error(404, "not found")
                 return
             payload = target.read_bytes()
+            content_type = CONTENT_TYPES.get(target.suffix.lower(), "application/octet-stream")
+            # Assets (the page's own modules and vendor bundles) revalidate;
+            # run data never caches at all.  See ``_asset_etag``.
+            etag = _asset_etag(payload) if path_is_asset else None
+            if etag is not None and self.headers.get("If-None-Match") == etag:
+                self.send_response(304)
+                self.send_header("ETag", etag)
+                self.send_header("Cache-Control", "no-cache")
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+                return
             self.send_response(200)
-            self.send_header("Content-Type", CONTENT_TYPES.get(target.suffix.lower(), "application/octet-stream"))
+            self.send_header("Content-Type", content_type)
             self.send_header("Content-Length", str(len(payload)))
-            self.send_header("Cache-Control", "no-store")
+            if etag is None:
+                self.send_header("Cache-Control", "no-store")
+                # Still no caching: the validator says which *build* answered,
+                # not which bytes, so it is something to compare and to demand
+                # back with ``If-Match`` - never something to store and reuse.
+                if run_id is not None:
+                    self.send_header("ETag", _data_etag(run_id))
+            else:
+                # ``no-cache`` is *revalidate every time*, not "do not cache".
+                # Never a positive max-age: a changed module has to be seen on
+                # a plain reload, and the viewer audit has been misled by a
+                # stale module before (engineering-pitfalls, "Viewer audit").
+                self.send_header("Cache-Control", "no-cache")
+                self.send_header("ETag", etag)
             self.end_headers()
             self.wfile.write(payload)
 
@@ -546,7 +739,7 @@ def _make_handler(run_root: Path, api: Api, presence: "_Presence"):
                 return run_root / "viewer_index.json"
             if path.startswith("/data/"):
                 return _safe_join(run_root / "parts", path[len("/data/"):])
-            return _safe_join(ASSET_ROOT, path.lstrip("/"))
+            return _asset_path(path.lstrip("/"))
 
         def log_message(self, fmt, *args):  # only complain about misses
             if "404" in (fmt % args):
@@ -611,13 +804,89 @@ def _idle_watchdog(presence: _Presence, timeout: float) -> None:
 
 
 def _safe_join(root: Path, relative: str) -> Path | None:
-    """Join under *root*, refusing anything that escapes it."""
-    candidate = (root / relative).resolve()
+    """Join under *root*, refusing anything that escapes it or cannot be a path.
+
+    ``resolve()`` does not only raise ``ValueError`` for a path outside the
+    root: on Windows it raises for a NUL byte in the name (node 26 F-05, which
+    dropped the connection and printed a traceback) and ``OSError`` for a name
+    the filesystem will not even look at.  All of them mean the same thing
+    here - this is not a file under *root* - and all of them are answered the
+    same way: no.
+    """
     try:
+        candidate = (root / relative).resolve()
         candidate.relative_to(root.resolve())
-    except ValueError:
+    except (ValueError, OSError):
         return None
     return candidate
+
+
+def _asset_etag(payload: bytes) -> str:
+    """A strong ETag over the bytes actually being served.
+
+    Content, not mtime: a checkout, a branch switch or an export restores
+    files with new timestamps and identical contents, and the page should not
+    have to re-download 2.4 MiB of vendor bundle for that (node 26 P-05).
+    Paired with ``Cache-Control: no-cache``, which asks the browser to
+    revalidate on *every* request - so a changed module is always fetched, and
+    an unchanged one costs one 304 instead of 1.27 MB.
+    """
+    import hashlib
+
+    return f'"{hashlib.sha256(payload).hexdigest()[:32]}"'
+
+
+def _data_etag(run_id: str) -> str:
+    """The validator run data answers with: the build, not the bytes.
+
+    Weak on purpose.  Every file of one build shares this value, so it cannot
+    mean "these bytes"; what it does mean is "this came out of run *x*", which
+    is the only question a page assembling four files of one part has to ask
+    (node 26 G-03, node 27F 6.2).
+    """
+    return f'W/"{run_id}"'
+
+
+def _if_match_satisfied(header: str, run_id: str | None) -> bool:
+    """Does an ``If-Match`` on run data name the build now on disk?
+
+    Compared weakly - ``W/"r-3"`` and ``"r-3"`` are the same request here -
+    because the validator is a build id and there is nothing strong about it.
+    ``*`` means "whatever build you have", which is satisfied as soon as there
+    is one.  No build on disk satisfies nothing: a page that demanded a run
+    cannot be handed files from a run the server cannot name.
+
+    This is a different conversation from the one static assets have.  There:
+    strong ETag over the bytes, ``no-cache``, ``If-None-Match``, 304 - a
+    cache revalidation.  Here: weak ETag over the build, ``no-store``,
+    ``If-Match``, 409 - a torn-read guard.  Neither header appears on the
+    other's path.
+    """
+    if run_id is None:
+        return False
+    wanted = {_data_etag(run_id), f'"{run_id}"'}
+    for candidate in header.split(","):
+        candidate = candidate.strip()
+        if candidate == "*" or candidate in wanted:
+            return True
+    return False
+
+
+def _asset_path(relative: str) -> Path | None:
+    """The file behind a ``/`` request, or None if the page does not publish it.
+
+    The mount is this directory's pages plus ``web/`` and ``vendor/`` - what
+    the module docstring has always said it was.  It is not the package: this
+    directory also holds the server's own source, its ``__pycache__`` and the
+    retired ``legacy/`` viewer, and none of those is part of the page
+    (node 26 F-15).
+    """
+    if not relative:
+        return None
+    head, separator, _rest = relative.replace("\\", "/").partition("/")
+    if separator:
+        return _safe_join(ASSET_ROOT, relative) if head in ASSET_DIRS else None
+    return _safe_join(ASSET_ROOT, head) if head.endswith(ASSET_PAGE_SUFFIXES) else None
 
 
 def serve(
@@ -667,8 +936,10 @@ def serve(
     # modules.  Not SO_REUSEADDR, because on Windows that lets a second server
     # bind a port another one already holds while the older process keeps
     # answering — failing loudly beats serving somebody else's data.
+    # Read once, at startup, from the environment - never from a request.
+    allow_delay = bool(os.environ.get(DEBUG_DELAY_ENV))
     try:
-        httpd = _Server(("127.0.0.1", port), _make_handler(run_root, api, presence))
+        httpd = _Server(("127.0.0.1", port), _make_handler(run_root, api, presence, allow_delay))
     except OSError:
         # The bind still fails loudly, but now it says who is in the way.
         for line in instances.describe_conflict(port):
@@ -688,6 +959,8 @@ def serve(
         print(f"[viewer] store actions from the page: {'on' if runner else 'off'}   input {input_path}")
         if idle_timeout and idle_timeout > 0:
             print(f"[viewer] idle timeout {idle_timeout:.0f}s (no browser opened; --idle-timeout 0 disables)")
+        if allow_delay:
+            print(f"[viewer] debug: ?delayMs=N honoured up to {MAX_DEBUG_DELAY_MS} ms ({DEBUG_DELAY_ENV} is set)")
         print(f"[viewer] open   {url}   (Ctrl+C to stop)")
         if open_browser:
             webbrowser.open(url)
@@ -698,5 +971,14 @@ def serve(
         except KeyboardInterrupt:
             print("\n[viewer] stopped")
         finally:
+            # Every way out of ``serve_forever`` lands here - Ctrl+C, the
+            # idle watchdog, ``view --stop`` and the ``--replace`` takeover
+            # all go through ``presence.request_stop``.  A job still running
+            # is still writing into the run, so it does not get to outlive
+            # the server that started it (node 26 F-07).
+            if runner is not None and runner.running:
+                print("[viewer] stopping the running job...")
+                if not runner.stop():
+                    print("[viewer] the job did not stop; it may still be writing to the run")
             instances.clear_lock(project_root, port)
     return 0

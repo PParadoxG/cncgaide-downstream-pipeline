@@ -10,6 +10,17 @@
 const KEY = 'gatherSeedShowExternalGaps';
 const listeners = new Set();
 
+// Another tab flipping the same preference should not leave this one showing
+// something different.  Installed once, for the module: it used to be
+// installed inside onExternalGapsChange, so every subscriber added a window
+// listener that the returned disposer - which only touches the Set - could
+// never take off again.
+window.addEventListener('storage', (event) => {
+  if (event.key !== KEY) return;
+  const shown = externalGapsShown();
+  for (const listener of listeners) listener(shown);
+});
+
 /** Default off: the external inputs are somebody else's to connect. */
 export function externalGapsShown() {
   try {
@@ -29,12 +40,8 @@ export function setExternalGapsShown(shown) {
   for (const listener of listeners) listener(shown);
 }
 
+/** Subscribe; the returned function really does unsubscribe. */
 export function onExternalGapsChange(listener) {
   listeners.add(listener);
-  // Another tab flipping the same preference should not leave this one
-  // showing something different.
-  window.addEventListener('storage', (event) => {
-    if (event.key === KEY) listener(externalGapsShown());
-  });
   return () => listeners.delete(listener);
 }

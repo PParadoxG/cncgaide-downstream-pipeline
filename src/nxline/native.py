@@ -200,8 +200,18 @@ def _gaps(raw: dict, native_type: str) -> dict[str, str]:
     it, made the artifacts say NX had declared a ``CHAMFER`` on a
     ``SURFACE_PLANAR`` (node 19' 1.2a, 546 such claims in this corpus).
     """
-    gaps = {name: reason for name, reason in STRUCTURAL_GAPS.items()
-            if tbox.declares(native_type, name)}
+    # The table's keys are patterns, but a gap has to be filed under the name
+    # its readers ask for.  ``attribute_state`` looks a name up with
+    # ``if name in missing``, so a rule asking about ``FACES_CYLINDER_1`` never
+    # matched the literal key ``FACES_*`` and fell through to a generic "NX
+    # declares X on Y and did not publish it" - losing the reason NX itself
+    # gives (finding E-05).  Expanded against the same class table
+    # ``declares`` reads, so nothing is claimed that NX did not declare.
+    gaps = {}
+    for pattern, reason in STRUCTURAL_GAPS.items():
+        for name in tbox.effective_attributes(native_type):
+            if fnmatchcase(name, pattern):
+                gaps[name] = reason
     for item in raw.get("unreadable") or []:
         name = str(item.get("name") or "")
         if not name:

@@ -338,7 +338,7 @@ heuristics:
   retired_reason_en: null
   authority: pipeline
   nxStatus: evaluable
-  nxTier: E
+  nxTier: D
   applies_to:
   - SLOT_*
   condition: SLOT_CLEARANCE(A,B).slotClearance >= t_slot_gap

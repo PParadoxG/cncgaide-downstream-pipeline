@@ -71,12 +71,21 @@ def _line_summary(record: dict, line: str) -> dict:
     if block is None:
         return {"status": None, "reason": "never built"}
     entry = block.get("entry") or {}
+    viewer = block.get("viewerEntry") or {}
     summary = {
         "status": block.get("status"),
         "producedAt": block.get("producedAt"),
         "nodeCount": entry.get("nodeCount"),
         "edgeCount": entry.get("edgeCount"),
         "featureCounts": entry.get("featureCounts"),
+        # A per-line audit: how many of the source STEP's faces no feature of
+        # *this* line claimed, and how many there were.  Both were computed per
+        # line all along and stated only at the entry's top level, where they
+        # were the open-source line's answer with nothing in the data saying so
+        # - so the home page's unclaimed column read an em dash for every line
+        # once it stopped branching on the line's name (27G, G-06).
+        "rawCadFaceCount": viewer.get("rawCadFaceCount"),
+        "unclaimedRawCadFaceCount": viewer.get("unclaimedRawCadFaceCount"),
         "heuristicCounts": block.get("heuristicCounts") or {},
         # Per-heuristic four-value counts, so the statistics view can fold the
         # shown line's own verdicts.  Each line's are its dialect's: node 19a
@@ -205,7 +214,13 @@ def rebuild_index(
             occ = get_line(record, LINE_OCC)
             viewer_entry = dict(occ["viewerEntry"])
             viewer_entry.setdefault("heuristicCounts", occ.get("heuristicCounts", {}))
-            viewer_entry.setdefault("heuristicSummary", occ.get("heuristicSummary", {}))
+            # No top-level heuristicSummary.  It was the open-source line's,
+            # stated where nothing said so, and byte for byte the same as
+            # ``lines.occ.heuristicSummary`` below - 84 KB of the index, sent
+            # twice on every first paint (27G, P-G6).  Its one reader was a
+            # fallback in the statistics view that had to name the line "occ"
+            # to use it, which display code may not do; that branch is gone.
+            viewer_entry.pop("heuristicSummary", None)
             state = lights.get(record["partId"])
             viewer_entry["light"] = (state.to_dict() if state is not None
                                      else {"state": "fresh", "reasons": []})

@@ -48,10 +48,13 @@ import hashlib
 import json
 import os
 import threading
+import time
+from collections import OrderedDict
 from dataclasses import dataclass, field
 from pathlib import Path
 
 import nx_location
+import occwl_provenance
 
 # layer -> list of (relative path, recursive) or (relative path, recursive,
 # excluded child dirs).  A non-recursive entry is one file.  Order inside a
@@ -60,7 +63,16 @@ LAYERS: dict[str, tuple[tuple, ...]] = {
     "contract": (("src/contract", True),),
     "core": (("src/core", True),),
     "parse": (("src/occline/parse", True), ("src/occline/kernel", True)),
-    "aagnet": (("src/occline/aagnet", True),),
+    # ``occwl_provenance`` is listed here rather than left outside every layer
+    # (the way ``nx_location`` is) because it decides three keys of
+    # ``aagnet_evidence.json``: what it says is part of what this layer wrote.
+    "aagnet": (("src/occline/aagnet", True), ("src/occwl_provenance.py", False)),
+    # Pure B-Rep topology and arithmetic, read by both lines: the rim walk the
+    # NX LOCATED_ON proof uses is the same code the v5.1 hole modules use.  It
+    # is its own layer rather than part of ``features`` so the freshness chip
+    # can say which of the two moved - and so that one day ``features`` can
+    # become occ-only without taking the shared walk with it.
+    "topology": (("src/topology", True),),
     "features": (("src/features", True),),
     # The relation and heuristic layers are split machine / content.  The two
     # packages' own modules - the executor, the edge structure, the four-value
@@ -123,14 +135,24 @@ EXTERNAL_LAYER_FILES: dict[str, tuple[str, ...]] = {
     "nx": (str(nx_location.nx_root() / "UGII" / "customization_base.xml"),),
 }
 
+# The same idea for a dependency that is installed rather than sitting at a
+# path: a callable returning one canonical string, hashed into the layer's
+# stamp.  ``aagnet`` covers occwl, whose graph extraction is the input to every
+# per-face score - a different occwl means different evidence, and until node
+# 28D nothing said so (node 27X left it open when occwl stopped being
+# vendored).  The callable reads installer metadata; it never imports occwl.
+EXTERNAL_LAYER_VALUES: dict[str, tuple[tuple[str, object], ...]] = {
+    "aagnet": (("occwl", occwl_provenance.stamp_value),),
+}
+
 # Which layers each line reads.  Guarded by a test against LAYERS and against
 # the line registry, so a new layer cannot be added without deciding who reads
 # it and a new line cannot be added without a row here.
 LINE_LAYERS: dict[str, frozenset[str]] = {
-    "occ": frozenset({"contract", "core", "parse", "aagnet", "features",
+    "occ": frozenset({"contract", "core", "parse", "aagnet", "topology", "features",
                       "relations", "relations_v51",
                       "heuristics", "heuristics_v51", "viewer"}),
-    "nx": frozenset({"contract", "core", "nx", "features",
+    "nx": frozenset({"contract", "core", "nx", "topology", "features",
                      "relations", "relations_nx",
                      "heuristics", "heuristics_nx", "viewer"}),
 }
@@ -159,19 +181,46 @@ EXCLUDED_FILES = frozenset({
 
 _CHUNK = 1 << 20
 _cache_lock = threading.Lock()
-# absolute path -> (size, mtime_ns, sha256)
-_file_cache: dict[str, tuple[int, int, str]] = {}
+# Upper bound on remembered files.  The layers cover a few hundred sources, so
+# this is roughly four times the working set: big enough that a long-lived
+# viewer process never evicts anything it is about to ask for again, small
+# enough that a mistake somewhere else cannot turn the cache into a leak.
+_FILE_CACHE_MAX = 4096
+# absolute path -> (size, mtime_ns, sha256), least-recently-used first
+_file_cache: "OrderedDict[str, tuple[int, int, str]]" = OrderedDict()
 
 
 # ------------------------------------------------------------------ hashing
 
+def clear_file_cache() -> None:
+    """Forget every remembered hash.
+
+    Named rather than left to ``_file_cache.clear()``: a process that wants a
+    cold read (a test measuring the cold path, a tool that just rewrote files
+    under another process's nose) should not have to reach into a private
+    dict to get one.
+    """
+    with _cache_lock:
+        _file_cache.clear()
+
+
 def file_sha256(path: Path) -> str:
-    """Content hash of one file, cached by size + mtime."""
+    """Content hash of one file, cached by size + mtime.
+
+    The hit criterion is *both* the size and the nanosecond mtime, so a
+    rewrite that keeps both is served from the cache - the one gap this cache
+    has, and out of reach in practice (NTFS resolves ``st_mtime_ns`` to 100 ns
+    and two writes to one path within one tick would also have to be the same
+    length).  Bounded at ``_FILE_CACHE_MAX`` entries, least-recently-used
+    evicted first, so a long-lived viewer server cannot grow one entry per
+    file it ever looked at.
+    """
     stat = path.stat()
     key = str(path)
     with _cache_lock:
         cached = _file_cache.get(key)
         if cached is not None and cached[0] == stat.st_size and cached[1] == stat.st_mtime_ns:
+            _file_cache.move_to_end(key)
             return cached[2]
     digest = hashlib.sha256()
     with path.open("rb") as handle:
@@ -180,6 +229,9 @@ def file_sha256(path: Path) -> str:
     value = digest.hexdigest()
     with _cache_lock:
         _file_cache[key] = (stat.st_size, stat.st_mtime_ns, value)
+        _file_cache.move_to_end(key)
+        while len(_file_cache) > _FILE_CACHE_MAX:
+            _file_cache.popitem(last=False)
     return value
 
 
@@ -302,12 +354,46 @@ def layer_stamp(project_root: str | Path, layer: str) -> str:
         digest.update(b"\0")
         digest.update((file_sha256(path) if path.is_file() else "absent").encode("ascii"))
         digest.update(b"\n")
+    for name, reader in EXTERNAL_LAYER_VALUES.get(layer, ()):
+        digest.update(("value:" + name).encode("utf-8"))
+        digest.update(b"\0")
+        digest.update(str(reader()).encode("utf-8"))
+        digest.update(b"\n")
     return digest.hexdigest()
 
 
-def layer_stamps(project_root: str | Path) -> dict[str, str]:
-    """One content stamp per layer, in table order."""
-    return {layer: layer_stamp(project_root, layer) for layer in LAYERS}
+# The last full answer, per project root: (monotonic time, stamps).  Only one
+# root is ever live in a process, so this is a single slot rather than a cache
+# that could grow.
+_stamps_memo: dict[str, tuple[float, dict[str, str]]] = {}
+
+
+def layer_stamps(project_root: str | Path, *, max_age: float = 0.0) -> dict[str, str]:
+    """One content stamp per layer, in table order.
+
+    A full answer walks and stats every file the table covers, which is the
+    only way to notice an edit in place - a directory mtime does not move when
+    a file's content changes.  ``max_age`` therefore defaults to 0: everything
+    that *decides* something (``plan``, the sync) pays the full walk and can
+    never act on a stale table.  A caller that only *displays* the answer may
+    pass a window and reuse one computed that recently; the worst that can
+    happen there is a "behind current rules" chip lagging by that many
+    seconds, which is what ``store_status`` does for the viewer's poll.
+    """
+    key = str(Path(project_root))
+    if max_age > 0:
+        cached = _stamps_memo.get(key)
+        if cached is not None and (time.monotonic() - cached[0]) <= max_age:
+            return dict(cached[1])
+    stamps = {layer: layer_stamp(project_root, layer) for layer in LAYERS}
+    _stamps_memo.clear()
+    _stamps_memo[key] = (time.monotonic(), dict(stamps))
+    return stamps
+
+
+def clear_stamps_memo() -> None:
+    """Forget the last full answer.  Companion to :func:`clear_file_cache`."""
+    _stamps_memo.clear()
 
 
 # ------------------------------------------------------------------- lights
@@ -408,6 +494,120 @@ def rules_changed(record: dict | None, current_stamps: dict[str, str]) -> list[s
     return [layer for layer in LAYERS if layer in seen]
 
 
+#: ``CUDA_VISIBLE_DEVICES`` values that leave the CUDA runtime with no device
+#: at all.  Any other value is a device *list*, and which member of it torch
+#: ends up on is not something this module is going to guess.
+CUDA_DISABLED_VALUES = frozenset({"", "-1"})
+
+#: The device a line records when ``--no-aagnet`` switched the model off.  It
+#: is not an inference device, and that is the point: it goes through
+#: :func:`device_mismatch` like any other device string, so a part built
+#: without the model and a part built with it are never mistaken for each
+#: other in either direction.
+AAGNET_DISABLED = "disabled"
+
+
+def resolve_inference_device(device: str | None) -> tuple[str | None, str | None]:
+    """Turn ``"auto"`` into the device it will resolve to - when that is certain.
+
+    Returns ``(device, note)``.  *device* is a concrete device string, or
+    ``None`` for **no opinion**, in which case *note* says why by name.
+
+    ``auto`` means ``cuda if torch.cuda.is_available() else cpu``
+    (``occline.aagnet.per_face._resolve_device``), and the plan may not import
+    torch to find out: ``plan`` and ``store status`` decide what to do, they do
+    not load the inference stack.  So the question is answered from what can be
+    read off the environment, and only where the answer cannot be wrong:
+
+    * ``CUDA_VISIBLE_DEVICES`` empty or ``-1`` hides every GPU from the CUDA
+      runtime, so ``torch.cuda.is_available()`` is ``False`` -> ``cpu``;
+    * a torch that was not built with CUDA (``torch/version.py`` says
+      ``cuda = None``) has no CUDA support at all -> ``cpu``;
+    * a CUDA build with GPUs visible **might** still fall back to cpu (no
+      driver, a driver too old, a disabled device).  Establishing that needs
+      the driver, i.e. torch, so this case gets no opinion.
+
+    Guessing "cuda" from something weaker - ``nvidia-smi`` being on ``PATH``,
+    say - is what is deliberately not done: a wrong guess makes every refresh
+    rebuild every part for ever, because the build then records the device the
+    guess said was wrong and the next plan disagrees with it again.  A missing
+    opinion only leaves finding B-10's residual gap open, which is the same
+    place it was before.
+    """
+    if not device or device != "auto":
+        return device, None
+    visible = os.environ.get("CUDA_VISIBLE_DEVICES")
+    if visible is not None and visible.strip() in CUDA_DISABLED_VALUES:
+        return "cpu", None
+    built_with, why = _torch_cuda_build()
+    if why is not None:
+        return None, why
+    if built_with is None:
+        return "cpu", None
+    return None, (
+        f"device auto: this torch is a CUDA {built_with} build, and whether a "
+        "usable GPU is present cannot be established without importing it"
+    )
+
+
+def _torch_cuda_build() -> tuple[str | None, str | None]:
+    """The CUDA version torch was built against, read without importing torch.
+
+    Returns ``(cuda_version_or_None, why_unreadable_or_None)``.  ``torch``'s
+    ``version.py`` is a generated file of literal assignments, so it is read
+    and parsed rather than executed - executing it would mean importing the
+    package this function exists to avoid.
+    """
+    import ast
+    import importlib.util
+
+    try:
+        spec = importlib.util.find_spec("torch")
+    except (ImportError, ValueError) as exc:
+        return None, f"device auto: torch cannot be located ({exc})"
+    locations = list(getattr(spec, "submodule_search_locations", None) or []) if spec else []
+    if not locations:
+        return None, "device auto: torch is not importable from here"
+    version_file = Path(locations[0]) / "version.py"
+    try:
+        text = version_file.read_text(encoding="utf-8")
+    except OSError as exc:
+        return None, f"device auto: torch's version.py cannot be read ({exc})"
+    for line in text.splitlines():
+        name, separator, value = line.partition("=")
+        if separator and name.strip() == "cuda":
+            try:
+                parsed = ast.literal_eval(value.strip())
+            except (SyntaxError, ValueError):
+                return None, "device auto: torch's version.py does not parse"
+            return (str(parsed) if parsed is not None else None), None
+    return None, "device auto: torch's version.py names no cuda build"
+
+
+def device_mismatch(block: dict, line: str, device: str | None) -> str | None:
+    """Why the device asked for makes this line out of date, or ``None``.
+
+    Only for lines that read the ``aagnet`` layer - the NX line records
+    ``device="nx"``, which names a session, not an inference device.  An
+    unnamed request has no opinion, ``auto`` is resolved by
+    :func:`resolve_inference_device` and has no opinion when that cannot be
+    certain, and a line with no recorded device (built before the field
+    existed) is not second-guessed.  ``cuda`` matches ``cuda:0``: the request
+    is a family, the record is the member of it that was chosen.
+    """
+    device, _note = resolve_inference_device(device)
+    if not device:
+        return None
+    if "aagnet" not in LINE_LAYERS.get(line, frozenset()):
+        return None
+    built_on = block.get("device")
+    if not built_on:
+        return None
+    if built_on == device or built_on.startswith(device + ":"):
+        return None
+    return f"built on device {built_on}, this sync asks for {device}"
+
+
 def plan_line(
     record: dict | None,
     line: str,
@@ -416,6 +616,7 @@ def plan_line(
     *,
     want_viewer: bool = True,
     force: bool = False,
+    device: str | None = None,
 ) -> LineAction:
     """What this sync owes one line of one part.
 
@@ -431,9 +632,21 @@ def plan_line(
     6. the line failed: something changed since    -> ``build``,
        nothing changed                             -> ``failed`` (do not rerun);
     7. viewer artifacts wanted but never built     -> ``build``;
-    8. a layer outside ``PARTIAL_LAYERS`` moved    -> ``build``;
-    9. only partial (heuristic) layers moved       -> ``heuristics_only``;
-    10. otherwise                                  -> ``skip``.
+    8. the inference device asked for is not the
+       one this line was built on                  -> ``build``;
+    9. a layer outside ``PARTIAL_LAYERS`` moved    -> ``build``;
+    10. only partial (heuristic) layers moved      -> ``heuristics_only``;
+    11. otherwise                                  -> ``skip``.
+
+    *device* is the inference device this sync was asked for.  The ``aagnet``
+    layer stamps the code and the weights but cannot stamp the device, and the
+    same weights on cuda and on cpu do not produce the same logits (finding
+    B-10, measured: all 43 faces of Part_6 move, by up to 5.2e-3, with no top
+    label changing).  So a line built on one device and asked for on the other
+    is out of date, and says so.  ``None`` is *no opinion* - nobody named a
+    device.  ``"auto"`` goes through :func:`resolve_inference_device`, which
+    answers it from the environment without importing torch and returns no
+    opinion where it cannot be certain.
     """
     if step_path is None:
         return LineAction(line, SKIP, ["source STEP not found under the input path"])
@@ -446,11 +659,15 @@ def plan_line(
     built_from = block.get("fingerprint")
     source_changed = built_from is not None and built_from != fingerprint(step_path)["sha256"]
 
+    device_changed = device_mismatch(block, line, device)
+
     reasons: list[str] = []
     if stale:
         reasons.append("changed layer(s): " + ", ".join(stale))
     if source_changed:
         reasons.append("source STEP changed since this line was built")
+    if device_changed:
+        reasons.append(device_changed)
 
     if force:
         return LineAction(line, BUILD, ["forced"] + reasons, stale)
@@ -469,6 +686,8 @@ def plan_line(
         return LineAction(line, FAILED, ["failed before and nothing changed since"])
     if want_viewer and not block.get("viewerEntry"):
         reasons.append("viewer artifacts were never built for this line")
+        return LineAction(line, BUILD, reasons, stale)
+    if device_changed:
         return LineAction(line, BUILD, reasons, stale)
     if any(layer not in PARTIAL_LAYERS for layer in stale):
         return LineAction(line, BUILD, reasons, stale)

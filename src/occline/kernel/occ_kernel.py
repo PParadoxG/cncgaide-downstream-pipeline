@@ -34,6 +34,16 @@ class OccKernelServices(KernelServices):
     def from_step(cls, source_step: str | Path) -> "OccKernelServices":
         return cls(OccGeometryContext.from_step(source_step))
 
+    @classmethod
+    def from_loaded_shape(cls, shape, source_step: str | Path) -> "OccKernelServices":
+        """Services over a shape the caller has already read from *source_step*.
+
+        Identical to :meth:`from_step` except that the file is not read again;
+        the resolved path is still recorded, so the context says the same thing
+        about where the geometry came from.
+        """
+        return cls(OccGeometryContext(shape, Path(source_step).resolve()))
+
     # The exact strings the stored corpus already carries: changing one would
     # change every result.json for no measurement reason.
     _PROVENANCE = {

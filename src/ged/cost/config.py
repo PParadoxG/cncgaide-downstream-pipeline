@@ -59,6 +59,13 @@ class CostConfig:
     # else - but it is what the pair cache's semantics stamp is taken from,
     # so a v5_1 entry can never be served to an nx_v1 query.
     representation: Representation = V5_1
+    # Empty means ``type_cost`` is the representation's own class-substitution
+    # table, which is what the semantics stamp already covers.  A non-empty
+    # name means an *ablation* replaced it (node 31's flat matrix), and then
+    # the name does join the configuration hash: two configs that price the
+    # same eight weights with different type costs are two configurations and
+    # must not share a cache entry.  See ``cost/presets.py``.
+    type_cost_name: str = ""
 
     def describe(self) -> dict[str, float | str]:
         return {

@@ -10,14 +10,21 @@
 // highlight comes from each part's view.json (built from id_map.json), the
 // same way the part page selects a feature.
 
-import { loadIndex, loadPart } from './data.js';
-import { applyLineTheme, currentLine } from './line.js';
+import { loadIndex, loadPart, setExpectedRun } from './data.js';
+import { escapeHtml } from './html.js';
+import { pollRunId, reloadPage, renderRunBanner } from './runwatch.js';
+import { applyLineTheme, currentLine, watchLineChange } from './line.js';
 import { createStore, initialState, resolveSelection } from './store.js';
 import { createViewer3D } from './viewer3d.js';
 import { setupTheme } from './theme.js';
 
 const $ = (id) => document.getElementById(id);
-const DEFAULT_MICRO = 1e-3;              // variants.MICRO_EDIT_COST
+// What counts as an edit too small to read is the evaluation's threshold
+// (ged/eval/variants.py::MICRO_EDIT_COST), and the server states it in
+// `/api/similarity/configs`.  This is only what the field shows in the
+// moment before that answer arrives: a second declaration of the number
+// would drift, and a comment naming the Python constant is not a check.
+const MICRO_BEFORE_CONFIGS = 1e-3;
 const SECTION_ORDER = ['nodes', 'edges', 'fixed_nodes', 'scale'];
 
 const sides = {
@@ -27,6 +34,8 @@ const sides = {
 
 const state = {
   index: null,
+  runId: null,              // the build both sides were read from
+  movedTo: null,            // the build on disk, once it is not that one
   // Which kernel line both sides are read from.  A comparison is always
   // within one line: the two ontologies do not share a scale, so there is no
   // meaning to a distance across them (node 21').  The page follows the
@@ -36,9 +45,12 @@ const state = {
   configName: null,         // preset name used for the request
   weightsText: '',          // K=V,… overrides carried in the URL
   payload: null,            // /api/similarity/compare payload (oriented a -> b)
+  reloadToken: 0,           // request generation; a stale landing is dropped
   direction: 'a_to_b',
   hideMicro: true,
-  micro: DEFAULT_MICRO,
+  micro: MICRO_BEFORE_CONFIGS,
+  defaultMicro: MICRO_BEFORE_CONFIGS,   // the server's threshold, once it says
+  microPinned: false,                   // the URL named one; the server does not overrule it
   collapsed: new Set(),     // group keys folded by the reviewer
   entries: [],              // flat list of visible, clickable entries in display order
   selected: null,           // index into entries
@@ -60,7 +72,10 @@ async function boot() {
   applyLineTheme(state.line);
   state.configName = params.get('config') || null;
   state.weightsText = params.get('weights') || '';
-  if (params.get('micro')) state.micro = Number(params.get('micro')) || DEFAULT_MICRO;
+  if (params.get('micro')) {
+    state.micro = Number(params.get('micro')) || state.defaultMicro;
+    state.microPinned = true;
+  }
 
   setupTheme($('theme-toggle'), (theme) => {
     for (const side of Object.values(sides)) side.store.update({ theme });
@@ -72,6 +87,12 @@ async function boot() {
   }
 
   state.index = await loadIndex();
+  // Both sides come out of one build, and the server enforces it: every
+  // artifact request from here on carries the run id (data.js), and a store
+  // that published another build answers 409 instead of mixing the two.
+  state.runId = state.index.runId || null;
+  setExpectedRun(state.runId);
+  watchRun();
   const ids = state.index.parts.map((part) => part.partId);
   for (const side of Object.values(sides)) {
     const select = $(`part-${side.key}`);
@@ -95,6 +116,16 @@ async function boot() {
   await loadConfigs();
   bindChrome();
   bindKeys();
+  // The page has no line switch of its own, so the launcher's switch in
+  // another tab is the only way this can change - and both sides plus the
+  // pair result have to be re-read from the other line's folders, the same
+  // reload a part change asks for.
+  watchLineChange((line) => {
+    if (line === state.line) return;
+    state.line = line;
+    applyLineTheme(line);
+    reload({ parts: ['a', 'b'] });
+  });
 
   // Audit hook: read-only handles, no hidden behaviour.
   window.tempCompare = {
@@ -109,12 +140,41 @@ async function boot() {
   await reload({ parts: ['a', 'b'] });
 }
 
+/**
+ * Notice when the store publishes a build after this page read its two parts.
+ *
+ * The part page and the launcher both learn this from a poll they already
+ * run; the compare page runs none, so it gets its own (runwatch.js).  The
+ * banner is the same sentence on all three, and it only ever offers the
+ * reload — an edit path recomputed under the reviewer mid-read is worse than
+ * one labelled as belonging to the previous build.
+ */
+function watchRun() {
+  pollRunId((runId) => {
+    if (state.runId && runId !== state.runId) state.movedTo = runId;
+    showRunBanner();
+  });
+}
+
+function showRunBanner() {
+  renderRunBanner($('run-banner'), {
+    shownRun: state.runId, currentRun: state.movedTo, onReload: reloadPage,
+  });
+}
+
 async function loadConfigs() {
   try {
     const response = await fetch(`api/similarity/configs?${lineParams()}`, { cache: 'no-store' });
     state.configs = response.ok ? await response.json() : null;
   } catch (error) {
     state.configs = null;
+  }
+  // The threshold comes from the run, not from this file.  A reviewer who
+  // pinned one in the URL keeps it.
+  const stated = Number(state.configs && state.configs.microEditCost);
+  if (Number.isFinite(stated) && stated >= 0) {
+    state.defaultMicro = stated;
+    if (!state.microPinned) state.micro = stated;
   }
   const select = $('config-select');
   select.innerHTML = '';
@@ -147,6 +207,11 @@ async function loadConfigs() {
 
 /** Reload the named sides' parts, then the pair result; keeps the URL honest. */
 async function reload({ parts }) {
+  // Request generation.  Changing a side twice quickly leaves two reloads in
+  // flight, and the slower one is not always the older one: without this the
+  // earlier answer could land last, leaving one side showing a part the pair
+  // result was not computed on - which reads as "these two share nothing".
+  const token = ++state.reloadToken;
   $('loading').classList.remove('hidden');
   state.error = null;
   const url = new URL(location.href);
@@ -160,20 +225,30 @@ async function reload({ parts }) {
     + (state.weightsText ? `&weights=${encodeURIComponent(state.weightsText)}` : '');
 
   try {
-    await Promise.all(parts.map((key) => loadSide(sides[key])));
-    await loadPair();
+    await Promise.all(parts.map((key) => loadSide(sides[key], token)));
+    if (token !== state.reloadToken) return;
+    await loadPair(token);
+    if (token !== state.reloadToken) return;
   } catch (error) {
+    if (token !== state.reloadToken) return;
     state.error = error.message;
+    if (error && error.name === 'RunChanged') {
+      state.movedTo = error.runId || 'a newer build';
+      showRunBanner();
+    }
     console.error(error);
   } finally {
-    $('loading').classList.add('hidden');
+    // The newer reload owns the overlay; this one leaves it where it found it.
+    if (token === state.reloadToken) $('loading').classList.add('hidden');
   }
   renderScore();
   renderPath();
 }
 
-async function loadSide(side) {
-  side.model = await loadPart(side.partId, state.line);
+async function loadSide(side, token) {
+  const model = await loadPart(side.partId, state.line);
+  if (token !== state.reloadToken) return;
+  side.model = model;
   side.store.update({
     selection: null,
     hover: null,
@@ -184,13 +259,14 @@ async function loadSide(side) {
   $(`hud-${side.key}`).textContent = `${side.key.toUpperCase()} · ${side.model.partId} · ${side.model.stats.rawCadFaceCount} faces`;
 }
 
-async function loadPair() {
+async function loadPair(token) {
   const params = new URLSearchParams({ a: sides.a.partId, b: sides.b.partId });
   if (state.configName) params.set('config', state.configName);
   if (state.weightsText) params.set('weights', state.weightsText);
   const response = await fetch(`api/similarity/compare?${lineParams(params)}`, { cache: 'no-store' });
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(payload.error || `compare: HTTP ${response.status}`);
+  if (token !== state.reloadToken) return;
   state.payload = payload;
   state.selected = null;
 }
@@ -236,7 +312,7 @@ function renderScore() {
     bar.append(piece);
     const tag = document.createElement('span');
     tag.className = `tag c${position % 6}`;
-    tag.innerHTML = `<i></i>${label(key)} <b>${fmt(value, 4)}</b>`;
+    tag.innerHTML = `<i></i>${escapeHtml(label(key))} <b>${fmt(value, 4)}</b>`;
     legend.append(tag);
   });
   const channels = item('cost channels', '', '');
@@ -340,7 +416,7 @@ function renderPath() {
   microInput.title = 'micro-edit threshold (cost)';
   microInput.addEventListener('change', () => {
     const value = Number(microInput.value);
-    state.micro = Number.isFinite(value) && value >= 0 ? value : DEFAULT_MICRO;
+    state.micro = Number.isFinite(value) && value >= 0 ? value : state.defaultMicro;
     microInput.value = String(state.micro);
     renderPath();
   });
@@ -369,10 +445,10 @@ function renderPath() {
   const totals = document.createElement('div');
   totals.className = 'cmp-totals' + (consistent ? '' : ' mismatch');
   totals.innerHTML =
-    `<span>listed <b>${fmt(listedCost, 4)}</b> of <b>${fmt(allCost, 4)}</b> = raw cost ${state.direction.replace(/_to_/, '→')}`
+    `<span>listed <b>${fmt(listedCost, 4)}</b> of <b>${fmt(allCost, 4)}</b> = raw cost ${escapeHtml(state.direction.replace(/_to_/, '→'))}`
     + (hiddenCount ? ` · ${hiddenCount} of ${allCount} edit(s) below ${state.micro} folded` : ` · ${allCount} edit(s)`)
     + '</span>'
-    + (other ? `<span>mean(${directions.map((d) => d.replace(/_to_/, '→')).join(', ')}) = <b>${fmt(mean, 4)}</b> `
+    + (other ? `<span>mean(${escapeHtml(directions.map((d) => d.replace(/_to_/, '→')).join(', '))}) = <b>${fmt(mean, 4)}</b> `
       + `${consistent ? '=' : '≠'} result raw cost <b>${fmt(payload.raw_cost, 4)}</b>${consistent ? ' ✓' : ' ✗'}</span>` : '');
   body.append(totals);
 
@@ -845,11 +921,6 @@ function fmt(value, digits) {
   return Number.isFinite(number) ? number.toFixed(digits) : '—';
 }
 
-function fmtCount(value) {
-  const number = Number(value);
-  if (!Number.isFinite(number)) return '—';
-  return Number.isInteger(number) ? String(number) : number.toFixed(1);
-}
 
 function short(iso) {
   if (!iso) return '—';
@@ -857,13 +928,8 @@ function short(iso) {
   return match ? `${match[1]} ${match[2]}` : iso;
 }
 
-function escapeHtml(text) {
-  return String(text).replace(/[&<>"']/g, (char) => (
-    { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]
-  ));
-}
 
 boot().catch((error) => {
-  $('loading').innerHTML = `<span class="spin"></span>${error.message}`;
+  $('loading').innerHTML = `<span class="spin"></span>${escapeHtml(error.message)}`;
   console.error(error);
 });

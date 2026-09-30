@@ -192,7 +192,7 @@ types:
     col: '#2a9d8f'
     dir: undirected
     gov: the four Slot leaves
-    prop: slotClearance (mm), courseAngle, courseParallel, transverseAngle
+    prop: slotClearance (mm)
     def: Minimum distance <b>between the opening boundaries</b> of two slots that share a host.
     when:
     - the two ends share at least one <code>LOCATED_ON</code> host owner

@@ -20,7 +20,14 @@ from typing import Any, Iterable
 from contract.partmodel import CurveType, PartModel, SurfaceType
 
 from features._shared.attributes import rounded_scalar
-from features._shared.hole_topology import dot, unit_vector, valid_vector
+from topology.faces import face_sort_key
+from topology.vectors import (
+    dot,
+    perpendicular_basis,
+    sample_angular_coverage,
+    unit_vector,
+    valid_vector,
+)
 from features._shared.transition_evidence import TransitionEvidence
 
 
@@ -120,11 +127,6 @@ def transition_regions(
             )
         )
     return regions
-
-
-def face_sort_key(face_id: str) -> tuple[int, str]:
-    tail = str(face_id).rsplit("_", 1)[-1]
-    return (int(tail), str(face_id)) if tail.isdigit() else (10**12, str(face_id))
 
 
 def _transition_family(model: PartModel, face_id: str) -> str | None:
@@ -436,7 +438,7 @@ def _region_circle_groups(model: PartModel, face_ids: tuple[str, ...]) -> list[d
                     ]
                 item["samplePoints"].extend(samples)
                 length = float(edge.length) if isinstance(edge.length, (int, float)) else 0.0
-                sampled_coverage = _sample_angular_coverage(samples, center, axis)
+                sampled_coverage = sample_angular_coverage(samples, center, axis)
                 length_coverage = length / float(radius) if length > 0.0 and float(radius) > 0.0 else 0.0
                 item["angularCoverage"] += max(length_coverage, sampled_coverage)
     groups = list(grouped.values())
@@ -448,36 +450,11 @@ def _region_circle_groups(model: PartModel, face_ids: tuple[str, ...]) -> list[d
     return groups
 
 
-def _sample_angular_coverage(samples: object, centre: object, axis: list[float]) -> float:
-    if not isinstance(samples, list) or len(samples) < 2 or not valid_vector(centre):
-        return 0.0
-    basis = _perpendicular_basis(axis)
-    angles: list[float] = []
-    for point in samples:
-        if not valid_vector(point):
-            continue
-        delta = [float(point[index]) - float(centre[index]) for index in range(3)]
-        axial = dot(delta, axis)
-        radial = [delta[index] - axial * axis[index] for index in range(3)]
-        angles.append(math.atan2(dot(radial, basis[1]), dot(radial, basis[0])))
-    if len(angles) < 2:
-        return 0.0
-    total = 0.0
-    for left, right in zip(angles, angles[1:]):
-        delta = abs(right - left)
-        while delta > math.pi:
-            delta = abs(delta - 2.0 * math.pi)
-        total += delta
-    return total
-
-
 def _common_axis(model: PartModel, face_ids: Iterable[str]) -> list[float] | None:
     axes = []
     for face_id in face_ids:
         face = model.faces[face_id]
         axis = face.parameters.get("axis_direction")
-        if axis is None and face.surface_type == SurfaceType.CONE:
-            axis = face.parameters.get("axis_direction")
         unit = unit_vector(axis)
         if unit is not None:
             axes.append(unit)
@@ -534,7 +511,7 @@ def _reference_angle_from_boundary(
                 if face.surface_type == SurfaceType.PLANE:
                     normal = unit_vector(face.parameters.get("normal"))
                 elif face.surface_type in {SurfaceType.CYLINDER, SurfaceType.CONE}:
-                    point = _boundary_sample_for_direction(boundary, radial, axis)
+                    point = _boundary_sample_for_direction(boundary, radial)
                     normal = _radial_normal(face, point) if point is not None else None
                 if normal is None:
                     continue
@@ -612,7 +589,7 @@ def _boundary_radial_unit(boundary: dict[str, Any], axis: list[float]) -> list[f
     return None
 
 
-def _boundary_sample_for_direction(boundary: dict[str, Any], radial: list[float], axis: list[float]) -> list[float] | None:
+def _boundary_sample_for_direction(boundary: dict[str, Any], radial: list[float]) -> list[float] | None:
     center = boundary.get("center")
     if not valid_vector(center):
         return None
@@ -653,7 +630,7 @@ def _planar_region_width(model: PartModel, face_ids: tuple[str, ...]) -> float |
     normal = _plane_normal(model, face_ids)
     if normal is None:
         return None
-    u, v = _perpendicular_basis(normal)
+    u, v = perpendicular_basis(normal)
     projected = [(dot(point, u), dot(point, v)) for point in points]
     mean_u = sum(item[0] for item in projected) / len(projected)
     mean_v = sum(item[1] for item in projected) / len(projected)
@@ -831,19 +808,6 @@ def _valid_bbox(value: object) -> bool:
     if not isinstance(value, dict) or not valid_vector(value.get("min")) or not valid_vector(value.get("max")):
         return False
     return all(float(value["min"][index]) <= float(value["max"][index]) for index in range(3))
-
-
-def _perpendicular_basis(axis: list[float]) -> tuple[list[float], list[float]]:
-    reference = [0.0, 0.0, 1.0] if abs(axis[2]) < 0.9 else [1.0, 0.0, 0.0]
-    u = [reference[1] * axis[2] - reference[2] * axis[1], reference[2] * axis[0] - reference[0] * axis[2], reference[0] * axis[1] - reference[1] * axis[0]]
-    magnitude = math.sqrt(sum(value * value for value in u))
-    if magnitude <= 1.0e-12:
-        reference = [0.0, 1.0, 0.0]
-        u = [reference[1] * axis[2] - reference[2] * axis[1], reference[2] * axis[0] - reference[0] * axis[2], reference[0] * axis[1] - reference[1] * axis[0]]
-        magnitude = math.sqrt(sum(value * value for value in u))
-    u = [value / magnitude for value in u]
-    v = [axis[1] * u[2] - axis[2] * u[1], axis[2] * u[0] - axis[0] * u[2], axis[0] * u[1] - axis[1] * u[0]]
-    return u, v
 
 
 def measure_fillet_radius(model: PartModel, face_ids: tuple[str, ...]) -> tuple[float | None, dict[str, Any]]:

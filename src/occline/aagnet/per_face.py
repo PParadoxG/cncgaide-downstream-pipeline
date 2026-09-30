@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 import contextlib
 import io
-import sys
 import time
 import traceback
 import warnings
@@ -15,20 +14,42 @@ from typing import Any
 import numpy as np
 import torch
 
+from occline.aagnet.vendor_import import vendor_top_level
+
 
 _PACKAGE_ROOT = Path(__file__).resolve().parent
 _AAGNET_ROOT = _PACKAGE_ROOT / "vendor" / "AAGNet"
-_OCCWL_SRC = _PACKAGE_ROOT / "vendor" / "occwl" / "src"
 
-for _path in (str(_AAGNET_ROOT), str(_OCCWL_SRC)):
-    if _path not in sys.path:
-        sys.path.insert(0, _path)
-
-from dataset.AAGExtractor import AAGExtractor
-from models.inst_segmentors import AAGNetSegmentor
-from utils.data_utils import load_one_graph, load_statistics, standardization
+# AAGNet is vendored - a research repository, not a package - so its tree
+# imports itself by the bare top-level names ``dataset`` / ``models`` /
+# ``utils``.  ``vendor_top_level`` binds exactly those three, exactly here, and
+# takes them back again: putting the vendor root on ``sys.path`` and leaving it
+# there made ``import utils`` mean AAGNet for the whole process (node 26
+# finding B-20).
+# occwl is *not* vendored: it is installed from its upstream repository at a
+# pinned commit by ``install/environment.yml``, the same way torch and dgl are,
+# and is imported from the environment.  AAGNet's graph extractor is what
+# reaches for it, so a missing occwl surfaces on the import below.
+try:
+    with vendor_top_level(_AAGNET_ROOT):
+        from dataset.AAGExtractor import AAGExtractor
+        from models.inst_segmentors import AAGNetSegmentor
+        from utils.data_utils import load_one_graph, load_statistics, standardization
+except ImportError as _exc:
+    if ((getattr(_exc, "name", "") or "").split(".")[0]) != "occwl":
+        raise
+    # Not a kernel refusal and not a degraded mode - the environment is simply
+    # not the one install/SETUP.md builds.  Say so, by name.
+    raise ImportError(
+        "occwl is not installed, and AAGNet's graph extractor imports it. "
+        "See install/SETUP.md, step 1: install/environment.yml pins it to "
+        "git+https://github.com/AutodeskAILab/occwl"
+        "@8b536ea8b3cf977dbafc1cf0a89eaa28fa996bba. "
+        "It is an installed dependency, not a snapshot in this repository."
+    ) from _exc
 
 from contract.evidence import FEATURE_NAMES
+from occwl_provenance import occwl_provenance
 
 
 
@@ -79,6 +100,9 @@ def run_aagnet_per_face(
         "schema_version": "aagnet_per_face_evidence.v1",
         "recognizer": "AAGNet",
         "recognizer_version": "vendor_snapshot",
+        # AAGNet is a snapshot in this tree; the graph it is given comes from
+        # an occwl that is *not*, so the evidence names that one too.
+        **occwl_provenance(),
         "part_id": Path(step_path).stem,
         "source_step": source_ref,
         "face_id_space": "cad_face_id + partmodel_face_id",
@@ -129,7 +153,8 @@ def run_aagnet_per_face(
         }
         if save_tensor_shapes_path:
             Path(save_tensor_shapes_path).write_text(
-                json.dumps(tensor_shapes, indent=2, ensure_ascii=False), encoding="utf-8"
+                json.dumps(tensor_shapes, indent=2, ensure_ascii=False),
+                encoding="utf-8", newline="",
             )
 
         mismatch = {
@@ -156,7 +181,8 @@ def run_aagnet_per_face(
                 "native_feature_groups": native_groups,
             }
             Path(save_native_groups_path).write_text(
-                json.dumps(out, indent=2, ensure_ascii=False), encoding="utf-8"
+                json.dumps(out, indent=2, ensure_ascii=False),
+                encoding="utf-8", newline="",
             )
         result["audit"] = {
             "native_feature_groups_saved": save_native_groups_path is not None,

@@ -7,20 +7,41 @@ import { resolveSelection } from './store.js';
 
 export function createInspector(container, store, callbacks) {
   let model = null;
+  let signature = null;
 
   function setModel(nextModel) {
     model = nextModel;
+    signature = null;
+    // A null model means "no part is open".  The panel is emptied here rather
+    // than in render(), which every store update calls: leaving the previous
+    // part's attributes under the new part's name is the failure this guards.
+    if (!model) { container.innerHTML = ''; return; }
     render(store.get());
   }
 
+  /**
+   * Re-render only when what the panel shows has changed.
+   *
+   * The panel is about the selection; the hover is not in it anywhere.  But
+   * hover is a store update, and a pointer crossing the 3D view produces one
+   * every frame - each of which tore the whole attribute table down and built
+   * it again.  Measured at 1.8 ms with nothing selected and 5.3 ms with a
+   * 47-attribute feature selected, against a 16.7 ms frame; an NX six-section
+   * blind hole publishes 107 attributes.  The same guard is in
+   * heuristics.js, put there for the same reason.
+   */
   function render(state) {
     if (!model) return;
+    const key = `${model.partId}|${state.selection ? JSON.stringify(state.selection) : ''}`;
+    if (key === signature) return;
+    signature = key;
+
     const selection = resolveSelection(state, model);
     container.innerHTML = '';
 
     if (selection.kind === 'feature') renderFeature(container, model, state, selection, callbacks);
-    else if (selection.kind === 'face') renderFace(container, model, state, selection, callbacks);
-    else if (selection.kind === 'edge') renderEdge(container, model, state, selection, callbacks);
+    else if (selection.kind === 'face') renderFace(container, model, selection, callbacks);
+    else if (selection.kind === 'edge') renderEdge(container, model, selection, callbacks);
     else renderPartSummary(container, model);
   }
 
@@ -93,7 +114,7 @@ function renderFeature(root, model, state, selection, callbacks) {
   }
 }
 
-function renderFace(root, model, state, selection, callbacks) {
+function renderFace(root, model, selection, callbacks) {
   const row = model.faceById.get(selection.focusFaceId);
   const claimed = row.featureIds.length > 0;
   const owner = claimed ? model.nodeById.get(row.featureIds[0]) : null;
@@ -133,7 +154,7 @@ function renderFace(root, model, state, selection, callbacks) {
   root.append(section('', actions));
 }
 
-function renderEdge(root, model, state, selection, callbacks) {
+function renderEdge(root, model, selection, callbacks) {
   const edge = model.edgeById.get(selection.focusEdgeId);
   if (!edge) return renderPartSummary(root, model);
   const source = model.nodeById.get(edge.source);
@@ -308,9 +329,14 @@ function foldedTable(caption, object) {
   details.className = 'kv-fold';
   const summary = document.createElement('summary');
   summary.textContent = caption;
-  const table = kvTable(object);
-  // kvTable folds long tables itself; inside a fold that would be two clicks.
-  details.append(summary, table.tagName === 'DETAILS' ? table.lastChild : table);
+  const built = kvTable(object);
+  // kvTable folds long tables itself; inside a fold that would be two clicks,
+  // so the table is taken out of its own fold.  By what it *is* - the one
+  // `table.kv` in there - not by where it sits: `lastChild` was right only
+  // for as long as kvTable appended nothing after the table, and would have
+  // handed a footnote to the caller the day it did (node 27G 6 #5).
+  const table = built.tagName === 'DETAILS' ? built.querySelector('table.kv') : built;
+  details.append(summary, table || built);
   return details;
 }
 

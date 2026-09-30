@@ -12,6 +12,7 @@ from OCC.Core.TopAbs import (
     TopAbs_FACE,
     TopAbs_SHAPE,
     TopAbs_SHELL,
+    TopAbs_SOLID,
     TopAbs_VERTEX,
     TopAbs_WIRE,
 )
@@ -21,10 +22,24 @@ from OCC.Core.TopoDS import (
     TopoDS_Face,
     TopoDS_Shape,
     TopoDS_Shell,
+    TopoDS_Solid,
     TopoDS_Vertex,
     TopoDS_Wire,
     topods,
 )
+
+
+def iter_solids(shape: TopoDS_Shape) -> Iterator[TopoDS_Solid]:
+    """Yield every *TopoDS_Solid* found under *shape*.
+
+    How many there are is the question that decides whether this file is one
+    part or several; both the parser and the solid classifier ask it, so the
+    explorer is written once here rather than twice at the two call sites.
+    """
+    exp = TopExp_Explorer(shape, TopAbs_SOLID, TopAbs_SHAPE)
+    while exp.More():
+        yield topods.Solid(exp.Current())
+        exp.Next()
 
 
 def iter_shells(shape: TopoDS_Shape) -> Iterator[TopoDS_Shell]:
@@ -82,14 +97,6 @@ def iter_vertices(edge: TopoDS_Edge) -> Iterator[TopoDS_Vertex]:
     generic-parent iterators).
     """
     exp = TopExp_Explorer(edge, TopAbs_VERTEX, TopAbs_SHAPE)
-    while exp.More():
-        yield topods.Vertex(exp.Current())
-        exp.Next()
-
-
-def _iter_vertices_from_shape(shape: TopoDS_Shape) -> Iterator[TopoDS_Vertex]:
-    """Yield every vertex in *shape* (recursive from root)."""
-    exp = TopExp_Explorer(shape, TopAbs_VERTEX, TopAbs_SHAPE)
     while exp.More():
         yield topods.Vertex(exp.Current())
         exp.Next()

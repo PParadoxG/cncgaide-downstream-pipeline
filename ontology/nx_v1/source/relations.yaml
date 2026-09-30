@@ -211,6 +211,7 @@ types:
     when:
     - 'an NX-side terminal resolver is needed: the open-source one is tied to v5.1 leaf semantics (the conical section of a Countersink, diagnostic keys such as <code>sectionFaceId</code>) and <b>cannot be reused</b>'
     - what can be reused is the purely topological layer beneath it, <code>wall_rims</code> / <code>classify_rim_end</code> - those two take only a PartModel and one face id
+    - 'a second proof stands beside it for the features that own no cylindrical wall: where a feature''s own faces stop, the edges they share with faces outside the set form closed components, and a component whose far side is not a cap is a way out'
     - the effective host of the terminal must be unique, or it does not hold
 - authority: pipeline
   label: INTERSECTS
@@ -253,7 +254,10 @@ types:
     when the two wall sets are separated.
   nx_basis: KernelServices measurement; not answerable from any attribute NX publishes.  Separation is
     read from the same measurement - two wall sets that touch return zero, which is a contact and not a
-    clearance.
+    clearance.  The faces handed to the measurement are the side walls, and they are picked out by
+    angle - a face of the pocket whose outward normal runs along the access direction NX publishes,
+    taken at |cos| <= 0.75.  That number is face-classification geometry and not a process parameter
+    anyone tunes, which is why it is not in the threshold table.
   nxNote: 'cnc:POCKET_CLEARANCE additionally requires a shared LOCATED_ON host owner; this side does not,
     for the reason given on HOLE_SPACING - host identity is not comparable across the two lines.'
   motivated_by:

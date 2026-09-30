@@ -25,7 +25,7 @@ def recognize_and_build(
     start_index: int = 1,
     **_: Any,
 ) -> tuple[list[FeatureNode], set[str], dict[str, Any]]:
-    claimed = claimed_face_ids if claimed_face_ids is not None else set()
+    claimed = set(claimed_face_ids or ())
     nodes: list[FeatureNode] = []
     rejected: list[dict[str, Any]] = []
     for face_id in sorted(model.faces, key=face_sort_key):
@@ -35,7 +35,7 @@ def recognize_and_build(
         if not _valid_face(face):
             rejected.append({"faceId": face_id, "reason": "invalid_or_zero_area_planar_face"})
             continue
-        node = _build_node(model, face_id, kernel, start_index + len(nodes))
+        node = _build_node(model, face_id, start_index + len(nodes))
         nodes.append(node)
         claimed.add(face_id)
     diagnostics = {
@@ -54,7 +54,7 @@ def _valid_face(face) -> bool:
     return isinstance(face.area, (int, float)) and math.isfinite(float(face.area)) and float(face.area) > 1.0e-9
 
 
-def _build_node(model: PartModel, face_id: str, kernel: Any | None, index: int) -> FeatureNode:
+def _build_node(model: PartModel, face_id: str, index: int) -> FeatureNode:
     face = model.faces[face_id]
     raw_normal = unit_vector(face.parameters.get("normal"))
     if raw_normal is not None and face.is_reversed:

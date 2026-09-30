@@ -135,8 +135,11 @@ def effective_attributes(name: str) -> tuple[str, ...]:
 def declares(name: str, attribute: str) -> bool:
     """Does this class declare an attribute of this name (globs allowed)?
 
-    ``FACES_*`` is a glob because that is how the projection states a gap it
-    cannot enumerate; a plain name matches itself.
+    Globs are still accepted - a caller may ask whether a class carries any
+    ``FACES_*`` at all - but the projection no longer files a gap under one:
+    since node 27 phase 2 it expands the pattern against
+    :func:`effective_attributes` first (finding E-05).  A plain name matches
+    itself.
     """
     return any(fnmatchcase(candidate, attribute)
                for candidate in _classes()["effective"].get(name, ()))
@@ -191,10 +194,27 @@ def head() -> dict:
     return _rules()["head"]
 
 
+@lru_cache(maxsize=1)
+def _source_version() -> tuple[tuple[str, str], ...]:
+    """The four source digests, hashed once per process.
+
+    ``source_version`` is asked for it on every registry lookup - the NX
+    dialect rebuilds its ``source()`` dictionary each time a rule is matched
+    against a class - and each unmemoised answer re-read and re-hashed four
+    YAML files.  The three siblings above already cache the *parsed* content of
+    the same files for the life of the process, so caching their digests adds
+    no assumption that was not already being made: an edit to a YAML travels
+    by a layer stamp and a fresh process, never by a re-read inside one.
+    """
+    return (
+        ("heuristicsYamlSha256", digest(HEURISTICS_YAML)),
+        ("thresholdsYamlSha256", digest(THRESHOLDS_YAML)),
+        ("classesYamlSha256", digest(CLASSES_YAML)),
+        ("derivedYamlSha256", digest(DERIVED_YAML)),
+    )
+
+
 def source_version() -> dict:
-    return {
-        "heuristicsYamlSha256": digest(HEURISTICS_YAML),
-        "thresholdsYamlSha256": digest(THRESHOLDS_YAML),
-        "classesYamlSha256": digest(CLASSES_YAML),
-        "derivedYamlSha256": digest(DERIVED_YAML),
-    }
+    # A fresh dict each call: the cache holds the digests, not a mapping a
+    # caller could edit under the next caller's feet.
+    return dict(_source_version())

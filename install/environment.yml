@@ -56,11 +56,25 @@ dependencies:
       - numpy==1.26.4
       - scipy==1.13.1
 
-      # Reached through the vendored AAGNet and occwl snapshots rather than by
-      # our own code, which is why they look unused at a glance.
+      # Reached through the vendored AAGNet snapshot and through occwl rather
+      # than by our own code, which is why they look unused at a glance.
       - timm==1.0.27
       - networkx==3.4.2
       - tqdm==4.68.3
+
+      # occwl - AAGNet's graph extractor imports it.  It is not on PyPI and it
+      # is not vendored in this repository, so it is installed straight from
+      # its upstream repository, pinned to a commit rather than to a tag: the
+      # project publishes no tags and its version string (3.0.0) has covered
+      # several different trees.  This commit is the one every stored result
+      # was produced with.
+      #
+      # No `--no-deps` line is needed: occwl's setup.py declares no
+      # install_requires, so pip installs nothing besides occwl itself.  In
+      # particular it does not try to pull pythonocc from PyPI, where it does
+      # not exist - the conda-forge `pythonocc-core` above is what it uses.
+      # Needs git on PATH and network access at environment-creation time.
+      - git+https://github.com/AutodeskAILab/occwl@8b536ea8b3cf977dbafc1cf0a89eaa28fa996bba#egg=occwl
 
       - PyYAML==6.0.3
 

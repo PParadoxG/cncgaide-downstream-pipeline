@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 from contract.partmodel import PartModel
 
 from core.models import FeatureEdge, FeatureNode
+from topology.signatures import SignatureView
 
 
 @dataclass(frozen=True)
@@ -43,6 +44,15 @@ class RelationContext:
     # LOCATED_ON host without going through the proof, host resolution and
     # ambiguity rejection this layer exists to perform.
     terminal_overrides: dict[str, list[dict]] = field(default_factory=dict)
+    # One geometric-edge-identity view for this model, filled in below.  Every
+    # rim walk a rule performs needs one; before node 28 each call built its
+    # own, so a part with n hole terminals signed its edges n times over.  It
+    # is a memo of a pure function of ``model``, like ``cache`` above.
+    signatures: SignatureView | None = None
+
+    def __post_init__(self) -> None:
+        if self.signatures is None:
+            object.__setattr__(self, "signatures", SignatureView(self.model))
 
     @classmethod
     def build(

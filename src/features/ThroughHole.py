@@ -20,8 +20,10 @@ from features._shared.attributes import (
     rounded_scalar,
     serialize_cad_face_ids,
 )
+from features._shared.closed_wall_band import face_sort_key
 from features._shared.evidence import best_hint, grouped_evidence, votes
 from features._shared.hole_topology import (
+    SignatureView,
     classify_rim_end,
     cylindrical_wall_axial_extent,
     is_reversed_cylindrical_wall,
@@ -58,24 +60,31 @@ def recognize_and_build(
     function only claims a candidate after it has proven to be ThroughHole,
     so it cannot consume a blind-hole wall while running first.
     """
-    claimed = claimed_face_ids if claimed_face_ids is not None else set()
+    claimed = set(claimed_face_ids or ())
     evidence_by_face = grouped_evidence(evidence_document)
+    # One signature table and one signature incidence index for this model,
+    # shared by every rim walk below.
+    signatures = SignatureView(model)
     nodes: list[FeatureNode] = []
     rejected: list[dict[str, Any]] = []
     seed_count = 0
 
-    for wall_id, wall in sorted(model.faces.items()):
+    # Numeric face order, as every other recogniser walks it: plain string
+    # order puts face_10 before face_9 and numbers the holes by that
+    # (finding C-15).
+    for wall_id in sorted(model.faces, key=face_sort_key):
+        wall = model.faces[wall_id]
         if wall_id in claimed or not is_reversed_cylindrical_wall(wall):
             continue
         hint = best_hint(wall_id, evidence_by_face)
         if not _has_hole_seed(hint):
             continue
         seed_count += 1
-        rims = wall_rims(model, wall_id)
+        rims = wall_rims(model, wall_id, signatures)
         if len(rims) != 2:
             rejected.append(_rejection(wall_id, hint, "invalid_rim_group_count_or_nonperiodic_wall"))
             continue
-        ends = [classify_rim_end(model, wall_id, rim) for rim in rims]
+        ends = [classify_rim_end(model, wall_id, rim, signatures) for rim in rims]
         if any(end.kind == "unknown" for end in ends):
             rejected.append(_rejection(wall_id, hint, "unknown_endpoint_roles"))
             continue

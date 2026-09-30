@@ -11,7 +11,7 @@
 const KEY = 'gatherSeedLine';
 const DEFAULT_LINE = 'occ';
 
-export const LINES = [
+const LINES = [
   { id: 'occ', label: 'Open source' },
   { id: 'nx', label: 'NX FBM' },
 ];
@@ -28,6 +28,24 @@ export function currentLine() {
 export function lineLabel(id) {
   const found = LINES.find((line) => line.id === id);
   return found ? found.label : id;
+}
+
+/**
+ * Follow a line switch made in another tab, for a page that has no switch of
+ * its own to keep in sync.
+ *
+ * The compare page is that page: it reads the stored choice once, before
+ * first paint, and used to stay on the old line for the rest of its life
+ * while the launcher next to it showed the other one (node 27G 6 #3).
+ * Returns the remover.
+ */
+export function watchLineChange(onChange) {
+  const handler = (event) => {
+    if (event.key !== KEY) return;
+    onChange(currentLine());
+  };
+  window.addEventListener('storage', handler);
+  return () => window.removeEventListener('storage', handler);
 }
 
 let fadeTimer = null;
@@ -55,13 +73,13 @@ export function applyLineTheme(id) {
  */
 export function setupLineSwitch(container, onChange) {
   if (!container) return null;
-  const buttons = LINES.map((line, position) => {
+  const buttons = LINES.map((line) => {
     const button = document.createElement('button');
     button.type = 'button';
     button.dataset.line = line.id;
     button.textContent = line.label;
     button.title = `Show the ${line.label} line's results`;
-    button.addEventListener('click', () => choose(line.id, position, true));
+    button.addEventListener('click', () => choose(line.id, true));
     container.append(button);
     return button;
   });
@@ -75,7 +93,7 @@ export function setupLineSwitch(container, onChange) {
     applyLineTheme(id);
   }
 
-  function choose(id, position, notify) {
+  function choose(id, notify) {
     try { localStorage.setItem(KEY, id); } catch (error) { /* choice just won't survive a reload */ }
     paint(id);
     if (notify && onChange) onChange(id);
@@ -83,9 +101,7 @@ export function setupLineSwitch(container, onChange) {
 
   // Another tab flipping the line should not leave this one showing a
   // different line under a different colour.
-  window.addEventListener('storage', (event) => {
-    if (event.key !== KEY) return;
-    const id = currentLine();
+  watchLineChange((id) => {
     paint(id);
     if (onChange) onChange(id);
   });

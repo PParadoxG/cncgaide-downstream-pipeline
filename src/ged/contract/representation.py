@@ -46,6 +46,12 @@ class Representation:
     grouped_relations: frozenset[str]
     host_implying_relations: frozenset[str]
     edge_metrics: Mapping[str, Mapping[str, str]]
+    # Insert / delete base weight of the relations this ontology publishes and
+    # does *not* clique-normalise.  A representation decision like the ones
+    # above: which relations exist is the ontology's answer, and so is what
+    # detaching one of them is worth.  A type absent here falls back to
+    # ``cost.edge_cost.DEFAULT_BASE_WEIGHT``.
+    static_edge_base_weight: Mapping[str, float] = field(default_factory=dict)
     # Whether a surface aggregate carries the pose-invariant normal count.
     surface_normal_classes: frozenset[str] = frozenset()
     # Fixed-node budget shares and attribute weights, by aggregate type key.
@@ -88,6 +94,11 @@ V5_1 = Representation(
         "HOLE_SPACING": {"axisSpacing": "length"},
         "POCKET_CLEARANCE": {"pocketClearance": "length"},
         "SLOT_CLEARANCE": {"slotClearance": "length"},
+    },
+    static_edge_base_weight={
+        "DIRECT_ADJACENT": 0.6,
+        "LOCATED_ON": 0.6,
+        "INTERSECTS": 1.0,
     },
     surface_normal_classes=frozenset(("PlanarFace",)),
     fixed_budget_shares={
@@ -137,6 +148,14 @@ def _nx_representation() -> Representation:
             "HOLE_SPACING": {"axisSpacing": "length"},
             "POCKET_CLEARANCE": {"pocketClearance": "length"},
             "SLOT_CLEARANCE": {"slotClearance": "length"},
+        },
+        # The two relations nx_v1 publishes and does not clique-normalise, at
+        # the same prices v5.1 gives them.  DIRECT_ADJACENT is not here for
+        # the reason it is not in ``known_relations``: nx_v1 does not publish
+        # the edge, so a price for it would be a price nothing can ever pay.
+        static_edge_base_weight={
+            "LOCATED_ON": 0.6,
+            "INTERSECTS": 1.0,
         },
         surface_normal_classes=frozenset(),
         fixed_budget_shares=nx_policy.surface_budget_shares(surfaces),
@@ -194,6 +213,10 @@ def check(rep: Representation) -> None:
                 raise AssertionError(f"{rep.name}: {leaf}.{name} has no attribute kind")
             if kind == "angle" and name not in rep.angle_range_deg:
                 raise AssertionError(f"{rep.name}: {name} is an angle without a range")
+    priced = set(rep.static_edge_base_weight) - set(rep.known_relations)
+    if priced:
+        raise AssertionError(
+            f"{rep.name}: base weights for relations it does not publish: {sorted(priced)}")
     missing = set(rep.semantic_leaves) - set(rep.leaf_attributes)
     if missing:
         raise AssertionError(f"{rep.name}: leaves without an attribute policy: {sorted(missing)}")

@@ -528,7 +528,12 @@ def extract_face_bbox(face: TopoDS_Face) -> dict | None:
         return None
 
 
-def get_outward_normal(face: TopoDS_Face, u: float, v: float) -> list[float] | None:
+def get_outward_normal(
+    face: TopoDS_Face,
+    u: float,
+    v: float,
+    adaptor: BRepAdaptor_Surface | None = None,
+) -> list[float] | None:
     """Return the **outward** surface normal of *face* at parameters *(u, v)*.
 
     ``BRepLProp_SLProps`` computes the geometric normal from the underlying
@@ -538,8 +543,31 @@ def get_outward_normal(face: TopoDS_Face, u: float, v: float) -> list[float] | N
 
     Returns ``None`` if the normal is not defined at the given parameters
     (e.g. singular point on a cone apex).
+
+    *adaptor* is an optional ``BRepAdaptor_Surface`` **of this same face**,
+    supplied by a caller that walks a whole uv grid over one face and already
+    holds one.  Building it here is the only per-call cost this function has
+    and it does not depend on *(u, v)*, so a 5x5 station loop was paying for
+    25 identical adaptors (4706 constructions for 4259 normals on a 119-face
+    part).  Passing an adaptor built from a *different* face would silently
+    return that other face's normal, so only a caller that owns both the face
+    and the adaptor may use it; when it is omitted the adaptor is built here
+    exactly as before.  Same technique as the per-face 2d classifier in
+    ``face_sampling.interior_uv`` (B-P7(a)), and scoped the same way: to one
+    face inside one pass, never a module-level cache keyed on ``hash(face)``.
+
+    ``face_sampling.sample_face_interior`` passes one since node 28D.  It is
+    worth knowing what that cost, because node 28S measured it and declined to
+    spend it: a reused ``BRepAdaptor_Surface`` carries an evaluation cache, and
+    on one b-spline face of the corpus (``Automotive Coolant Thermostat
+    Housing``, face_103) that cache moves the stored normal by one ulp - seven
+    of the twenty-five stations print a different last digit, and the part's
+    ``artifactDigest`` moves with them.  No conclusion and no piece of evidence
+    moves.  So a caller who wires this up outside a batch that is allowed to
+    move a digest will fail the digest comparison, and correctly.
     """
-    adaptor = BRepAdaptor_Surface(face)
+    if adaptor is None:
+        adaptor = BRepAdaptor_Surface(face)
     props = BRepLProp_SLProps(adaptor, u, v, 1, 1e-6)
     if not props.IsNormalDefined():
         return None

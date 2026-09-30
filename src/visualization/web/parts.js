@@ -6,6 +6,7 @@
 // history).  No feature, relation or heuristic name is known to this file; a
 // changed layer is shown by the name the store gives it.
 
+import { escapeHtml } from './html.js';
 import { deletePart, describeJob, postRefresh, safeStepName, uploadStep } from './refresh.js';
 
 // The light -> what the chip says.  The light is about the source STEP and
@@ -113,7 +114,7 @@ export function metaCell(row, producedAt) {
   // because "when was this part built" is a question per line.
   const shown = producedAt !== undefined ? producedAt : (row && row.producedAt);
   const when = shown ? shortTime(shown) : '—';
-  span.innerHTML = `<span class="meta-when">${when}</span>`;
+  span.innerHTML = `<span class="meta-when">${escapeHtml(when)}</span>`;
   span.title = `produced at ${shown || '—'} (UTC)`
     + (row && row.fingerprint ? `\nsource STEP sha256 ${row.fingerprint}` : '');
   return span;
@@ -249,8 +250,3 @@ export function renderJobBar(element, status, note) {
   element.innerHTML = parts.join('');
 }
 
-function escapeHtml(text) {
-  return String(text).replace(/[&<>"']/g, (char) => (
-    { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]
-  ));
-}

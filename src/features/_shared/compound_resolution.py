@@ -19,13 +19,14 @@ from core.models import FeatureNode
 from features._shared.attributes import canonical_axis, cad_face_ids, rounded_scalar, serialize_cad_face_ids
 from features._shared.measurement import min_wall_thickness
 from features._shared.evidence import grouped_evidence
-from features._shared.hole_topology import (
-    _edge_signature,
-    classify_rim_end,
+from topology.faces import FaceIntervalTable
+from topology.hole_topology import classify_rim_end, wall_rims
+from topology.signatures import SignatureView
+from topology.vectors import (
     dot,
+    sample_angular_coverage,
     unit_vector,
     valid_vector,
-    wall_rims,
 )
 
 
@@ -54,6 +55,7 @@ def resolve_counterbore(
     start_index: int = 1,
     kernel=None,
     ladder=None,
+    intervals: FaceIntervalTable | None = None,
 ) -> CompoundResolution:
     """Resolve a coaxial run of **exactly two** cylinders into one Counterbore.
 
@@ -71,6 +73,7 @@ def resolve_counterbore(
         start_index=start_index,
         kernel=kernel,
         ladder=ladder,
+        intervals=intervals,
     )
 
 
@@ -83,6 +86,7 @@ def resolve_countersink(
     start_index: int = 1,
     kernel=None,
     ladder=None,
+    intervals: FaceIntervalTable | None = None,
 ) -> CompoundResolution:
     """Resolve a **lone** cylinder plus the cone on its entry end into one Countersink.
 
@@ -101,11 +105,18 @@ def resolve_countersink(
         start_index=start_index,
         kernel=kernel,
         ladder=ladder,
+        intervals=intervals,
     )
 
 
 def _resolve(model, evidence_document, component_nodes, claimed_face_ids, *, kind: str, start_index: int,
-             kernel=None, ladder=None) -> CompoundResolution:
+             kernel=None, ladder=None, intervals: FaceIntervalTable | None = None) -> CompoundResolution:
+    # One signature view and one face-interval table for this model; the rim
+    # walks below are the hot path and the interval of a face along one axis
+    # is a constant of the part.  A caller that already built them - the
+    # orchestrator does, once, for the whole recognition run - hands them in.
+    intervals = intervals if intervals is not None else FaceIntervalTable(model)
+    signatures = intervals.signatures
     if ladder is None:
         # Imported here, not at module scope: hole_ladder builds on this module's geometry
         # helpers, so a top-level import would be circular.  Deriving it when a caller does not
@@ -113,7 +124,7 @@ def _resolve(model, evidence_document, component_nodes, claimed_face_ids, *, kin
         # back to the pairwise behaviour this gate replaces.
         from features._shared.hole_ladder import discover_hole_ladders
 
-        ladder = discover_hole_ladders(model)
+        ladder = discover_hole_ladders(model, intervals)
     claimed = set(claimed_face_ids or ())
     holes = [node for node in component_nodes if node.featureType in {"ThroughHole", "BlindHole"}]
     evidence_by_face = grouped_evidence(evidence_document or {})
@@ -134,9 +145,9 @@ def _resolve(model, evidence_document, component_nodes, claimed_face_ids, *, kin
                 continue
             match_rejections: list[dict[str, Any]] = []
             if kind == "Counterbore":
-                matches = _counterbore_matches(model, base_id, component_nodes, match_rejections)
+                matches = _counterbore_matches(model, base_id, intervals, match_rejections)
             else:
-                matches = _countersink_matches(model, base_id, component_nodes, match_rejections)
+                matches = _countersink_matches(model, base_id, intervals, match_rejections)
             matches = [match for match in matches if _ladder_admits(ladder, kind, base_id, match, withheld)]
             if not matches:
                 if match_rejections:
@@ -285,14 +296,15 @@ def _is_hole_component_seed(node: FeatureNode, face_id: str, evidence_by_face: d
 def _counterbore_matches(
     model: PartModel,
     base_id: str,
-    component_nodes: list[FeatureNode],
+    intervals: FaceIntervalTable,
     rejection_log: list[dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
+    signatures = intervals.signatures
     base = model.faces[base_id]
     base_axis = unit_vector(base.parameters.get("axis_direction"))
     base_origin = base.parameters.get("axis_location")
     base_radius = _positive(base.parameters.get("radius"))
-    base_interval = _face_interval(model, base, base_axis)
+    base_interval = intervals.interval(base, base_axis)
     if base_axis is None or not valid_vector(base_origin) or base_radius is None or base_interval is None:
         return []
     results: list[dict[str, Any]] = []
@@ -302,7 +314,7 @@ def _counterbore_matches(
         radius = _positive(section.parameters.get("radius"))
         axis = unit_vector(section.parameters.get("axis_direction"))
         origin = section.parameters.get("axis_location")
-        interval = _face_interval(model, section, base_axis)
+        interval = intervals.interval(section, base_axis)
         if radius is None or radius <= base_radius + _RADIUS_TOL or axis is None or not valid_vector(origin) or interval is None:
             continue
         if _axis_angle(base_axis, axis) > _AXIS_TOL or _line_distance(base_origin, origin, base_axis) > _AXIS_DISTANCE_TOL:
@@ -314,7 +326,7 @@ def _counterbore_matches(
         if bool(section.is_reversed) != bool(base.is_reversed):
             _record_rejection(rejection_log, base_id, section_id, "compound_section_orientation_mismatch")
             continue
-        topology = _complete_cylindrical_section(model, section_id, base_axis)
+        topology = _complete_cylindrical_section(model, section_id, signatures)
         if not topology["valid"]:
             _record_rejection(
                 rejection_log,
@@ -368,14 +380,14 @@ def _counterbore_matches(
 def _countersink_matches(
     model: PartModel,
     base_id: str,
-    component_nodes: list[FeatureNode],
+    intervals: FaceIntervalTable,
     rejection_log: list[dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     base = model.faces[base_id]
     base_axis = unit_vector(base.parameters.get("axis_direction"))
     base_origin = base.parameters.get("axis_location")
     base_radius = _positive(base.parameters.get("radius"))
-    base_interval = _face_interval(model, base, base_axis)
+    base_interval = intervals.interval(base, base_axis)
     if base_axis is None or not valid_vector(base_origin) or base_radius is None or base_interval is None:
         return []
     results: list[dict[str, Any]] = []
@@ -671,45 +683,8 @@ def _line_distance(left: object, right: object, axis: list[float]) -> float:
     return math.sqrt(sum(value * value for value in radial))
 
 
-def _face_interval(model: PartModel, face, axis: list[float] | None) -> tuple[float, float] | None:
-    if axis is None:
-        return None
-    # The normalizer persists true axial extrema from the B-Rep boundary.
-    # They are authoritative, especially for a tilted axis where projecting an
-    # axis-aligned bounding box can substantially overestimate the interval.
-    minimum = face.parameters.get("axial_min")
-    maximum = face.parameters.get("axial_max")
-    if isinstance(minimum, (int, float)) and isinstance(maximum, (int, float)):
-        minimum, maximum = float(minimum), float(maximum)
-        if math.isfinite(minimum) and math.isfinite(maximum) and maximum - minimum > _AXIAL_TOL:
-            stored_axis = unit_vector(face.parameters.get("axis_direction"))
-            orientation = dot(stored_axis, axis) if stored_axis is not None else 1.0
-            if abs(abs(orientation) - 1.0) <= _AXIS_TOL:
-                converted = (minimum * (1.0 if orientation >= 0.0 else -1.0), maximum * (1.0 if orientation >= 0.0 else -1.0))
-                return min(converted), max(converted)
-            # A persisted axial range with an unrelated axis is not reliable
-            # for this query; continue to the rim/AABB fallbacks.
-
-    # For a cylindrical wall with complete rims, use their actual projected
-    # positions before falling back to the coarse AABB projection.  This keeps
-    # seam/split geometry accurate without inventing a second rim detector.
-    if getattr(face, "surface_type", None) == SurfaceType.CYLINDER:
-        rims = wall_rims(model, face.id)
-        positions = [float(rim.axis_position) for rim in rims if math.isfinite(float(rim.axis_position))]
-        if len(positions) >= 2 and max(positions) - min(positions) > _AXIAL_TOL:
-            return min(positions), max(positions)
-
-    bbox = face.bbox
-    if isinstance(bbox, dict) and valid_vector(bbox.get("min")) and valid_vector(bbox.get("max")):
-        values = []
-        for mask in range(8):
-            point = [bbox["max"][index] if mask & (1 << index) else bbox["min"][index] for index in range(3)]
-            values.append(dot(point, axis))
-        return min(values), max(values)
-    return None
-
-
-def _complete_cylindrical_section(model: PartModel, face_id: str, axis: list[float]) -> dict[str, Any]:
+def _complete_cylindrical_section(model: PartModel, face_id: str,
+                                  signatures: SignatureView) -> dict[str, Any]:
     """Require exactly two complete closed wall rims on a cylinder section.
 
     ``wall_rims`` performs the existing winding, radius and seam/split-aware
@@ -717,7 +692,8 @@ def _complete_cylindrical_section(model: PartModel, face_id: str, axis: list[flo
     arbitrary ``CIRCLE`` edges or a local half-cylinder wire from becoming a
     Counterbore section.
     """
-    rims = wall_rims(model, face_id)
+    lookup = signatures
+    rims = wall_rims(model, face_id, lookup)
     if len(rims) != 2:
         return {
             "valid": False,
@@ -740,7 +716,7 @@ def _complete_cylindrical_section(model: PartModel, face_id: str, axis: list[flo
         for edge_id in model.loops[loop_id].edge_ids
     }
     section_edge_signatures = {
-        _edge_signature(model.edges[edge_id])
+        lookup[edge_id]
         for edge_id in section_edges
         if edge_id in model.edges
     }
@@ -748,7 +724,7 @@ def _complete_cylindrical_section(model: PartModel, face_id: str, axis: list[flo
         [
             edge_id
             for edge_id in rim.edge_ids
-            if edge_id not in model.edges or _edge_signature(model.edges[edge_id]) not in section_edge_signatures
+            if edge_id not in model.edges or lookup[edge_id] not in section_edge_signatures
         ]
         for rim in rims
     ]
@@ -760,7 +736,7 @@ def _complete_cylindrical_section(model: PartModel, face_id: str, axis: list[flo
             "rimCount": len(rims),
             "unmatchedRimEdgeIds": unmatched_rim_edges,
         }
-    rim_ends = [classify_rim_end(model, face_id, rim) for rim in rims]
+    rim_ends = [classify_rim_end(model, face_id, rim, lookup) for rim in rims]
     end_kinds = [end.kind for end in rim_ends]
     if sorted(end_kinds) != ["capped", "open"]:
         return {
@@ -1011,55 +987,12 @@ def _cone_circles(model: PartModel, face_id: str, axis: list[float]) -> list[dic
             if length > 0.0 and float(radius) > 0.0:
                 item["angularCoverage"] += length / float(radius)
             else:
-                item["angularCoverage"] += _sample_angular_coverage(edge.sample_points, centre, axis)
+                item["angularCoverage"] += sample_angular_coverage(edge.sample_points, centre, axis)
     result = []
     for item in grouped.values():
         item["complete"] = float(item["angularCoverage"]) >= 2.0 * math.pi - _CIRCLE_COVERAGE_TOL
         result.append(item)
     return sorted(result, key=lambda item: (item["radius"], item["axisPosition"], item["edgeIds"]))
-
-
-def _sample_angular_coverage(samples: object, centre: object, axis: list[float]) -> float:
-    """Conservative angular coverage fallback for edges without length."""
-    if not isinstance(samples, list) or len(samples) < 2 or not valid_vector(centre):
-        return 0.0
-    basis = _perpendicular_basis(axis)
-    angles: list[float] = []
-    for point in samples:
-        if not valid_vector(point):
-            continue
-        delta = [float(point[index]) - float(centre[index]) for index in range(3)]
-        axial = dot(delta, axis)
-        radial = [delta[index] - axial * axis[index] for index in range(3)]
-        angles.append(math.atan2(dot(radial, basis[1]), dot(radial, basis[0])))
-    if len(angles) < 2:
-        return 0.0
-    total = 0.0
-    for left, right in zip(angles, angles[1:]):
-        delta = abs(right - left)
-        while delta > math.pi:
-            delta = abs(delta - 2.0 * math.pi)
-        total += delta
-    return total
-
-
-def _perpendicular_basis(axis: list[float]) -> tuple[list[float], list[float]]:
-    reference = [0.0, 0.0, 1.0] if abs(axis[2]) < 0.9 else [1.0, 0.0, 0.0]
-    cross = [
-        reference[1] * axis[2] - reference[2] * axis[1],
-        reference[2] * axis[0] - reference[0] * axis[2],
-        reference[0] * axis[1] - reference[1] * axis[0],
-    ]
-    magnitude = math.sqrt(sum(value * value for value in cross))
-    if magnitude <= 1.0e-12:
-        return [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]
-    u = [value / magnitude for value in cross]
-    v = [
-        axis[1] * u[2] - axis[2] * u[1],
-        axis[2] * u[0] - axis[0] * u[2],
-        axis[0] * u[1] - axis[1] * u[0],
-    ]
-    return u, v
 
 
 def _ratio(numerator: object, denominator: object) -> float | None:

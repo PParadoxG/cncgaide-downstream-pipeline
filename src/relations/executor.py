@@ -153,6 +153,11 @@ _RELATION_ORIENTATION_KEYS = (
     ("leftPartmodelFaceIds", "rightPartmodelFaceIds"),
     ("leftCadFaceIds", "rightCadFaceIds"),
     ("leftBoundaryEdgeId", "rightBoundaryEdgeId"),
+    # The plural pair is what the nx SLOT_CLEARANCE witness actually carries
+    # (node 21' changed that rule to measure opening boundaries and named the
+    # keys in the plural); without it a flipped edge said "left" of A on one
+    # key and "left" of B on the next.
+    ("leftBoundaryEdgeIds", "rightBoundaryEdgeIds"),
     ("nearestPointA", "nearestPointB"),
     ("courseDirectionA", "courseDirectionB"),
 )

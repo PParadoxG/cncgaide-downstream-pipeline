@@ -17,8 +17,8 @@ from collections import defaultdict
 
 from contract.kernel import DISTANCE_MEASURED
 from core.models import FeatureNode
-from features._shared.attributes import cad_face_ids
-from features._shared.hole_topology import RimGroup, classify_rim_end, wall_rims
+from topology.faces import cad_face_ids
+from topology.hole_topology import RimGroup, classify_rim_end, wall_rims
 
 from relations._shared import (  # noqa: F401
     AXIS_LINE_TOL_MM,
@@ -476,7 +476,8 @@ def _resolve_located_terminals(context, node: FeatureNode) -> list[dict]:
                 axis_position = large.get("axisPosition", diagnostics.get("outerCoordinate"))
                 try:
                     rim = RimGroup(edge_ids=edge_ids, axis_position=float(axis_position), sample_points=[])
-                    end = classify_rim_end(context.model, section_id, rim)
+                    end = classify_rim_end(context.model, section_id, rim,
+                                           context.signatures)
                 except (TypeError, ValueError):
                     end = None
                 if end is not None and end.kind == "open":
@@ -508,7 +509,7 @@ def _resolve_located_terminals(context, node: FeatureNode) -> list[dict]:
         # The composite hole's outer/largest opening is represented by the
         # section wall; its internal shoulder/base stage is not a terminal.
         for wall_id in _hole_wall_for_terminal(context, node):
-            rims = wall_rims(context.model, wall_id)
+            rims = wall_rims(context.model, wall_id, context.signatures)
             if node.featureType == "Counterbore":
                 # Compound resolution already proved the cylinder rim kind
                 # and face set.  Prefer that frozen evidence when a second
@@ -545,7 +546,7 @@ def _resolve_located_terminals(context, node: FeatureNode) -> list[dict]:
             else:
                 rim_order = rims
             for index, rim in enumerate(rim_order):
-                end = classify_rim_end(context.model, wall_id, rim)
+                end = classify_rim_end(context.model, wall_id, rim, context.signatures)
                 if end.kind != "open":
                     continue
                 if node.featureType == "BlindHole":

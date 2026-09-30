@@ -142,6 +142,17 @@ export function createViewer3D(container, store, callbacks) {
   function setModel(nextModel) {
     clear();
     model = nextModel;
+    overlaySignature = null;
+    // No part open.  clear() already emptied the scene; the buffer views are
+    // dropped with it so nothing keeps the previous part's mesh alive.
+    if (!model) {
+      edgePositions = null;
+      allPositions = null;
+      allNormals = null;
+      allIndices = null;
+      needsRender = true;
+      return;
+    }
 
     const buffers = model.mesh.buffers;
     const positions = new Float32Array(model.buffer, buffers.positions.byteOffset, buffers.positions.count * 3);
@@ -472,6 +483,9 @@ export function createViewer3D(container, store, callbacks) {
     applyState(store.get());
   }
 
+  // What updateSelectionOverlay / updateSelectedEdges were last built from.
+  let overlaySignature = null;
+
   function applyState(state) {
     if (!model) return;
     const selection = resolveSelection(state, model);
@@ -533,10 +547,28 @@ export function createViewer3D(container, store, callbacks) {
     }
 
     if (edgeLines) edgeLines.visible = state.showEdges;
-    updateSelectionOverlay(selection, state);
-    // The B-Rep outline of the selection belongs to the edge layer: it is
-    // drawn only while the Edges switch is on, together with the x-ray faces.
-    if (state.showEdges) updateSelectedEdges(selection); else updateSelectedEdges({ allFaceIds: new Set() });
+
+    // The overlay and the selection's B-Rep outline are rebuilt from scratch:
+    // a MeshBasicMaterial disposed and made again for every selected face,
+    // and every one of those faces' edge vertices merged into a fresh
+    // Float32Array.  Neither depends on where the pointer is - except that an
+    // overlay takes its colour from the face beneath it, so a hover *on a
+    // selected face* does change one.  That case is in the key; hovering
+    // anything else, which is what a pointer crossing the model does all day,
+    // now leaves both alone.
+    const overlayKey = [
+      [...selection.allFaceIds].sort((a, b) => a - b).join(','),
+      [...selection.primaryFaceIds].sort((a, b) => a - b).join(','),
+      [...hover.faceIds].filter((id) => selection.allFaceIds.has(id)).sort((a, b) => a - b).join(','),
+      state.isolate, state.showEdges, themeIsLight,
+    ].join('|');
+    if (overlayKey !== overlaySignature) {
+      overlaySignature = overlayKey;
+      updateSelectionOverlay(selection, state);
+      // The B-Rep outline of the selection belongs to the edge layer: it is
+      // drawn only while the Edges switch is on, together with the x-ray faces.
+      if (state.showEdges) updateSelectedEdges(selection); else updateSelectedEdges({ allFaceIds: new Set() });
+    }
     needsRender = true;
   }
 
@@ -750,8 +782,13 @@ export function createViewer3D(container, store, callbacks) {
     },
     /** Called after every user-driven or animated camera move. */
     onCameraChange(listener) {
-      controls.addEventListener('change', () => listener());
-      return () => controls.removeEventListener('change', listener);
+      // The wrapper is what gets added, so the wrapper is what gets removed:
+      // handing removeEventListener the bare listener took nothing off, and a
+      // caller that disposed its subscription would have kept receiving
+      // moves - two linked viewers echoing each other, with no way to stop.
+      const wrapped = () => listener();
+      controls.addEventListener('change', wrapped);
+      return () => controls.removeEventListener('change', wrapped);
     },
     /** Centre and radius of the loaded part, for size-relative camera links. */
     bounds() {

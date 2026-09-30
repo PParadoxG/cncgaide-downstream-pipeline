@@ -94,13 +94,15 @@ def port_owner_pid(port: int) -> int | None:
     try:
         if sys.platform == "win32":
             output = subprocess.run(
-                ["netstat", "-ano", "-p", "TCP"], capture_output=True, text=True, timeout=10
+                ["netstat", "-ano", "-p", "TCP"], capture_output=True, text=True,
+                encoding="utf-8", errors="replace", timeout=10
             ).stdout
             pattern = re.compile(rf"127\.0\.0\.1:{int(port)}\s+\S+\s+LISTENING\s+(\d+)")
             match = pattern.search(output)
             return int(match.group(1)) if match else None
         output = subprocess.run(
-            ["lsof", "-ti", f"tcp:{int(port)}", "-sTCP:LISTEN"], capture_output=True, text=True, timeout=10
+            ["lsof", "-ti", f"tcp:{int(port)}", "-sTCP:LISTEN"], capture_output=True, text=True,
+            encoding="utf-8", errors="replace", timeout=10
         ).stdout.strip()
         return int(output.splitlines()[0]) if output else None
     except Exception:

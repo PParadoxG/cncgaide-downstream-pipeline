@@ -56,7 +56,7 @@ def recognize_and_build(
 ) -> tuple[list[FeatureNode], set[str], dict[str, Any]]:
     """Build Slot nodes from shared semantic resolutions."""
 
-    claimed = claimed_face_ids if claimed_face_ids is not None else set()
+    claimed = set(claimed_face_ids or ())
     if resolutions is None:
         if transition is None:
             transition = TransitionEvidence(model, evidence_document)
@@ -110,7 +110,7 @@ def recognize_and_build(
             profile,
             geometry,
             feature_type,
-            counters[feature_type],
+            start_index + counters[feature_type] - 1,
             kernel,
         )
         nodes.append(node)
@@ -247,7 +247,7 @@ def measure_profile(
     axis = _depth_axis(model, candidate, mouth, deepest)
     depth = _depth(axis, mouth, deepest)
     mouth_width = _mouth_width(model, candidate)
-    width = _width(model, candidate, class_name, mouth, axis, depth)
+    width = _width(model, candidate, class_name)
     bottom_width = _width_at_depth(model, candidate, mouth, axis, depth) if class_name == "rectangular" else None
     if class_name == "triangular_v":
         width = mouth_width
@@ -489,7 +489,7 @@ def _mouth_width(model, candidate):
     return value if value > _GEOMETRY_TOL else None
 
 
-def _width(model, candidate, profile_class, mouth, axis, depth):
+def _width(model, candidate, profile_class):
     if profile_class == "triangular_v":
         return _mouth_width(model, candidate)
     if profile_class == "other":

@@ -37,6 +37,24 @@ def digest(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()[:16] if path.is_file() else ""
 
 
+class RuleDiscoveryError(RuntimeError):
+    """One rule module of a dialect's package did not import.
+
+    Named rather than left as whatever the module happened to raise, because
+    the interesting fact is *which* module refused and the original error is
+    only half of that.  The cause travels on ``__cause__``.
+    """
+
+
+class DuplicateRuleError(RuntimeError):
+    """Two rule modules of one dialect claim the same heuristic id.
+
+    One of them would never run and which one is decided by the walk order of
+    the package, so this is refused rather than resolved.  ``one H, one file``
+    is the discipline; this is the discipline saying so out loud.
+    """
+
+
 class BaseHeuristicRegistry:
     """Frozen definitions + the rule modules that implement them.
 
@@ -58,18 +76,38 @@ class BaseHeuristicRegistry:
     # -- rule discovery ---------------------------------------------------
     @classmethod
     def discover(cls) -> None:
+        """Import every rule module of this dialect, or refuse to be loaded.
+
+        ``_loaded`` is set *after* the walk, never before it.  Set first, a
+        module that raised on import would leave the flag standing and every
+        later ``rules()`` would answer with the rules that happened to register
+        before the failure - a truncated H set that looks exactly like a
+        complete one, in every part of the run that follows.
+        """
         if cls._loaded:
             return
-        cls._loaded = True
         module = importlib.import_module(cls.package)
         for info in pkgutil.iter_modules(module.__path__, cls.package + "."):
             if info.name.rsplit(".", 1)[-1].startswith("_"):
                 continue
-            importlib.import_module(info.name)
+            try:
+                importlib.import_module(info.name)
+            except Exception as exc:
+                raise RuleDiscoveryError(
+                    f"heuristic rule module {info.name!r} did not import: "
+                    f"{type(exc).__name__}: {exc}"
+                ) from exc
+        cls._loaded = True
 
     @classmethod
     def register(cls, rule: HeuristicRule) -> None:
-        cls._rules.setdefault(rule.h_id, rule)
+        existing = cls._rules.get(rule.h_id)
+        if existing is not None:
+            raise DuplicateRuleError(
+                f"{rule.h_id} is registered twice in {cls.__name__}: "
+                f"{type(existing).__module__} and {type(rule).__module__}"
+            )
+        cls._rules[rule.h_id] = rule
 
     @classmethod
     def rules(cls) -> list[HeuristicRule]:

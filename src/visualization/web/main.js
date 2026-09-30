@@ -3,7 +3,9 @@
 // The graph and the 3D viewer never call each other.  Both raise intents here,
 // the store resolves them, and both re-render from the same resolved selection.
 
-import { loadIndex, loadPart, loadPartGeometry } from './data.js';
+import { loadIndex, loadPart, loadPartGeometry, setExpectedRun } from './data.js';
+import { RUN_MOVED_TEXT, reloadPage } from './runwatch.js';
+import { escapeHtml } from './html.js';
 import { currentLine, lineLabel, setupLineSwitch } from './line.js';
 import { createStore, initialState, resolveSelection } from './store.js';
 import { createGraph } from './graph.js';
@@ -25,6 +27,9 @@ let heuristics = null;
 let indexData = null;
 // Why the shown line has no result for the open part (null = it has one).
 let lineGap = null;
+// Set when the open part could not be loaded at all.  Distinct from lineGap:
+// that one still has geometry to show, this one has nothing.
+let loadError = null;
 
 // ------------------------------------------------------------------ intents
 
@@ -99,7 +104,6 @@ const callbacks = {
     }
     if (faces.size) viewer.frameFaces([...faces]);
   },
-  onGraphStats() {},
 };
 
 /**
@@ -127,6 +131,9 @@ function directionHints(node) {
 async function boot() {
   const index = await loadIndex();
   indexData = index;
+  // Everything this page fetches from here on is demanded from *this* build;
+  // a store that publishes another one mid-load is refused, not mixed in.
+  setExpectedRun(index.runId);
 
   const select = $('part-select');
   for (const part of index.parts) {
@@ -196,19 +203,41 @@ function lineInfo(partId, line) {
   return (entry && entry.lines && entry.lines[line]) || null;
 }
 
+/**
+ * A line whose mesh can stand in for one that has no result for this part.
+ *
+ * The candidates come from the index's own list of lines, in the order the
+ * run wrote them - not from a fixed occ/nx pair, which is what stood here.
+ * The registry allows more than two lines, and the pair would have sent a
+ * third line to fetch the NX mesh whether NX had built this part or not.
+ */
+function meshDonor(partId, shownLine) {
+  const entry = (indexData?.parts || []).find((part) => part.partId === partId);
+  for (const [candidate, state] of Object.entries((entry && entry.lines) || {})) {
+    if (candidate === shownLine) continue;
+    if (state && state.status === 'PASS') return candidate;
+  }
+  return null;
+}
+
 async function openPart(partId) {
   $('loading').classList.remove('hidden');
   try {
     const line = currentLine();
     const info = lineInfo(partId, line);
     lineGap = null;
+    loadError = null;
     if (info && info.status === 'PASS') {
       model = await loadPart(partId, line);
     } else {
       // This line has nothing for this part.  Named, not blank: the geometry
-      // the other line tessellated stays reviewable and the banner says why.
+      // another line tessellated stays reviewable and the banner says why.
       lineGap = { line, status: (info && info.status) || 'NOT_BUILT', info };
-      model = await loadPartGeometry(partId, line === 'nx' ? 'occ' : 'nx', line);
+      const donor = meshDonor(partId, line);
+      if (!donor) {
+        throw new Error(`no line has built this part, so there is no mesh to show it with`);
+      }
+      model = await loadPartGeometry(partId, donor, line);
     }
     // Defaults travel with the data: which feature types start hidden, and
     // which relation types start visible.  A relation registered later shows
@@ -233,11 +262,55 @@ async function openPart(partId) {
     storeWatch.loadedProducedAt = loadedLineProducedAt();
     renderBanner();
   } catch (error) {
-    $('inspector').innerHTML = `<div class="insp-empty">${partId}: ${error.message}</div>`;
+    // Nothing of the part that was on screen may survive this.  By the time
+    // the load fails the picker and the URL already name the new part, so
+    // leaving the old solid, graph and verdicts up shows one part's geometry
+    // under another part's name — which reads as correct and is the worst of
+    // the failure modes.  The views are emptied first, then the reason is
+    // named twice: once in the banner, where the other named degradations
+    // live, and once where the details of the part would have been.
+    model = null;
+    // A refused build is known here before the next poll would find it, and
+    // the banner should say so in the same paint that empties the views.
+    if (error && error.name === 'RunChanged') {
+      storeWatch.movedTo = error.runId || 'a newer build';
+    }
+    showNoPart(partId, error);
     console.error(error);
   } finally {
     $('loading').classList.add('hidden');
   }
+}
+
+/** Empty every view and say why the part on the picker is not on screen. */
+function showNoPart(partId, error) {
+  model = null;
+  lineGap = null;
+  loadError = { partId, message: (error && error.message) || String(error) };
+  // The views are emptied before the store is touched: each of them ignores a
+  // state update once its model is gone, so this order cannot redraw the part
+  // that just went away.
+  graph.setModel(null);
+  viewer.setModel(null);
+  inspector.setModel(null);
+  heuristics.setModel(null);
+  store.update({
+    selection: null,
+    hover: null,
+    search: '',
+    hiddenTypes: new Set(),
+    visibleEdgeTypes: new Set(),
+  });
+  $('graph-search').value = '';
+  renderTypeFilter();
+  renderRelationFilter();
+  $('find-similar').href = `index.html?view=similarity&run=1&query=${encodeURIComponent(partId)}`;
+  storeWatch.loadedProducedAt = null;
+  renderBanner();
+  const note = document.createElement('div');
+  note.className = 'insp-empty';
+  note.textContent = `${partId} could not be opened: ${loadError.message}`;
+  $('inspector').append(note);
 }
 
 // ------------------------------------------------------------------- chrome
@@ -245,6 +318,7 @@ async function openPart(partId) {
 function renderTypeFilter() {
   const container = $('type-filter');
   container.innerHTML = '';
+  if (!model) return; // no part on screen: there is nothing to filter
   const hidden = store.get().hiddenTypes;
 
   for (const entry of model.featureTypes) {
@@ -288,6 +362,7 @@ function drawableEdgeCount(edgeType) {
 function renderRelationFilter() {
   const container = $('relation-filter');
   container.innerHTML = '';
+  if (!model) return; // no part on screen: there is nothing to filter
   const visible = store.get().visibleEdgeTypes;
 
   for (const entry of model.relationTypes) {
@@ -301,7 +376,7 @@ function renderRelationFilter() {
         + `\n${entry.count - drawable} have an endpoint whose feature type is hidden`;
     // The drawable count is the number that matters; the total sits beside
     // it, quieter, with the reason in the tooltip.
-    chip.innerHTML = `<span class="swatch"></span>${entry.edgeType} `
+    chip.innerHTML = `<span class="swatch"></span>${escapeHtml(entry.edgeType)} `
       + (drawable === entry.count
         ? `<span class="n">${entry.count}</span>`
         : `<span class="n">${drawable}</span><span class="of">/${entry.count}</span>`);
@@ -539,6 +614,7 @@ const storeWatch = {
   rows: new Map(),          // partId -> api/parts row
   status: null,             // last api/status payload
   runId: null,              // run id this page loaded
+  movedTo: null,            // run id on disk, once it is not the one above
   loadedProducedAt: null,   // producedAt of the open part's shown line when it loaded
   timer: null,
   rowFor(partId) { return this.rows.get(partId) || null; },
@@ -561,6 +637,13 @@ async function pollStore() {
     status = null;
   }
   storeWatch.status = status;
+  // The run id this page loaded is finally read by somebody.  Once the store
+  // serves a different build, every artifact on screen came from the previous
+  // one - not just the open part - and the whole page is what has to be
+  // re-taken.  Offered, never performed: the reviewer decides when.
+  if (status && status.dataRunId && storeWatch.runId && status.dataRunId !== storeWatch.runId) {
+    storeWatch.movedTo = status.dataRunId;
+  }
   const rows = await fetchParts();
   if (rows) storeWatch.rows = new Map(rows.map((row) => [row.partId, row]));
   if (model && storeWatch.loadedProducedAt === null) {
@@ -574,13 +657,52 @@ async function pollStore() {
 
 function renderBanner() {
   const banner = $('store-banner');
-  if (!banner || !model) return;
-  const row = storeWatch.rowFor(model.partId);
-  const status = storeWatch.status;
-  const writable = Boolean(status) && status.state !== 'disabled';
+  if (!banner) return;
   banner.innerHTML = '';
   banner.hidden = true;
   banner.dataset.state = '';
+
+  // The run itself moving outranks everything: it is not one part that is
+  // out of date but every artifact the page is holding, and the answer is a
+  // page reload rather than any per-part action below.
+  if (storeWatch.movedTo) {
+    banner.dataset.state = 'updated';
+    const chip = document.createElement('span');
+    chip.className = 'st-chip';
+    chip.textContent = 'rebuilt';
+    const text = document.createElement('span');
+    text.className = 'banner-text';
+    text.textContent = RUN_MOVED_TEXT
+      + (loadError ? ` ${loadError.partId} is not on screen: ${loadError.message}.` : '');
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'btn banner-btn';
+    button.textContent = 'Reload page';
+    button.addEventListener('click', reloadPage);
+    banner.append(chip, text, button);
+    banner.hidden = false;
+    return;
+  }
+
+  // A part that could not be loaded outranks everything below, and it is the
+  // only state in which the rest of this function has no part to describe.
+  if (loadError) {
+    banner.dataset.state = 'missing';
+    const chip = document.createElement('span');
+    chip.className = 'st-chip new';
+    chip.textContent = 'not loaded';
+    const text = document.createElement('span');
+    text.className = 'banner-text';
+    text.textContent = `${loadError.partId} could not be loaded — ${loadError.message}.`
+      + ' Nothing of this part is on screen.';
+    banner.append(chip, text);
+    banner.hidden = false;
+    return;
+  }
+  if (!model) return;
+  const row = storeWatch.rowFor(model.partId);
+  const status = storeWatch.status;
+  const writable = Boolean(status) && status.state !== 'disabled';
 
   // The line gap outranks store drift: when the page is showing bare
   // geometry because the shown line has no result, that is the one thing the
@@ -674,7 +796,7 @@ async function rerunCurrent() {
 }
 
 boot().catch((error) => {
-  $('loading').innerHTML = `<span class="spin"></span>${error.message}`;
+  $('loading').innerHTML = `<span class="spin"></span>${escapeHtml(error.message)}`;
   console.error(error);
 });
 

@@ -50,8 +50,9 @@ from features import (
     ThroughCut,
     ThroughHole,
 )
-from features._shared.closed_wall_band import analysis_diagnostics, discover_wall_bands
+from features._shared.closed_wall_band import analysis_diagnostics, build_edge_index, discover_wall_bands
 from features._shared.hole_ladder import discover_hole_ladders
+from topology.faces import FaceIntervalTable
 from features._shared.open_sweep import analysis_diagnostics as open_sweep_diagnostics, discover_open_sweeps
 from features._shared.slot_step_resolution import resolve_open_sweep_candidates
 from features._shared.transition_evidence import build_transition_evidence
@@ -86,6 +87,11 @@ def run_recognition(model: PartModel, evidence: dict, kernel=None) -> Recognitio
     """
     # Explicit fixed order. ThroughHole tests classification but only claims
     # verified open/open walls; BlindHole then sees all remaining candidates.
+    #
+    # Ownership convention (one convention, every module): a module copies the
+    # claimed set it is handed, adds what it owns, and returns the copy.  It
+    # never writes into the caller's set, so the running total is whatever the
+    # caller rebinds below - which is why every call here rebinds ``claimed``.
     claimed: set[str] = set()
     through_nodes, claimed, through_diagnostics = ThroughHole.recognize_and_build(
         model, evidence, claimed, kernel=kernel
@@ -97,34 +103,46 @@ def run_recognition(model: PartModel, evidence: dict, kernel=None) -> Recognitio
     # hole / Counterbore / StepBore sequence) and Chamfer uses the cones it releases.  It runs
     # here because the low-level hole nodes it re-types are complete, and because Chamfer -
     # further down - needs its answer.
-    ladder = discover_hole_ladders(model)
+    # It reads one further shared analysis: the face-interval table, which
+    # memoises the axial span of a face along an axis (and with it the rim
+    # walk a cylinder needs), and carries the part's one signature view.
+    intervals = FaceIntervalTable(model)
+    ladder = discover_hole_ladders(model, intervals)
+    # Fourth shared structural analysis: the per-part edge index (geometric
+    # signature equivalence, signature incidence, loop duplicates).  It is a
+    # pure function of the model, so it is built here once and handed to every
+    # consumer instead of being rebuilt six times over one part.
+    edge_index = build_edge_index(model)
     # Shared structural analysis on the faces the hole modules left: closed
     # side-wall bands (owns nothing) and AAGNet chamfer/round transition
     # hints (a hint, not a decision).  Both are built once and consumed by
     # the manufacturing-feature modules below.
-    band_analysis = discover_wall_bands(model, claimed)
+    band_analysis = discover_wall_bands(model, claimed, edge_index=edge_index)
     transition = build_transition_evidence(model, evidence)
     pocket_nodes, claimed, pocket_diagnostics = Pocket.recognize_and_build(
-        model, evidence, claimed, bands=band_analysis, transition=transition, kernel=kernel
+        model, evidence, claimed, bands=band_analysis, transition=transition, kernel=kernel,
+        edge_index=edge_index,
     )
     # Boss consumes the same band analysis with the mirrored sign pattern, and
     # runs after Pocket so a cavity floor is already owned before the bosses
     # standing on it are registered.
     boss_nodes, claimed, boss_diagnostics = Boss.recognize_and_build(
-        model, evidence, claimed, bands=band_analysis, transition=transition, kernel=kernel
+        model, evidence, claimed, bands=band_analysis, transition=transition, kernel=kernel,
+        edge_index=edge_index,
     )
     # ThroughCut reads the same bands with the third sign pattern
     # (CONVEX -> CONVEX) and additionally proves a real opening at both ends.
     # It runs last of the band consumers because a round through hole belongs
     # to ThroughHole, which claimed its walls before the bands were built.
     cut_nodes, claimed, cut_diagnostics = ThroughCut.recognize_and_build(
-        model, evidence, claimed, bands=band_analysis, transition=transition, kernel=kernel
+        model, evidence, claimed, bands=band_analysis, transition=transition, kernel=kernel,
+        edge_index=edge_index,
     )
     # Open Sweep is a second shared, non-semantic structural analysis.  It
     # runs only after all currently stable manufacturing features have taken
     # ownership.  Formal Slot/Step resolve the shared candidates before
     # transition/residual registration can consume their principal geometry.
-    sweep_analysis = discover_open_sweeps(model, claimed)
+    sweep_analysis = discover_open_sweeps(model, claimed, edge_index=edge_index)
     slot_step_resolutions = resolve_open_sweep_candidates(
         model,
         evidence,
@@ -132,6 +150,7 @@ def run_recognition(model: PartModel, evidence: dict, kernel=None) -> Recognitio
         transition=transition,
         kernel=kernel,
         claimed_face_ids=claimed,
+        edge_index=edge_index,
     )
     slot_nodes, claimed, slot_diagnostics = Slot.recognize_and_build(
         model,
@@ -186,7 +205,7 @@ def run_recognition(model: PartModel, evidence: dict, kernel=None) -> Recognitio
         counterbore_diagnostics,
         countersink_diagnostics,
         step_bore_diagnostics,
-    ) = _resolve_compounds(model, evidence, claimed, low_level_nodes, kernel, ladder)
+    ) = _resolve_compounds(model, evidence, claimed, low_level_nodes, kernel, ladder, intervals)
 
     # Residual registration is intentionally last: it never competes with a
     # manufacturing feature or a compound replacement for ownership.
@@ -265,6 +284,7 @@ def _resolve_compounds(
     low_level_nodes: list,
     kernel=None,
     ladder=None,
+    intervals=None,
 ) -> tuple[list, list, list, list, set[str], dict, dict, dict]:
     """Dispatch each proven coaxial run to the one leaf class its shape names.
 
@@ -275,17 +295,17 @@ def _resolve_compounds(
     grammar the two can no longer compete for the same cylinder.
     """
     countersink_nodes, claimed, countersink_diagnostics = Countersink.recognize_and_build(
-        model, evidence, claimed, component_nodes=low_level_nodes, kernel=kernel, ladder=ladder
+        model, evidence, claimed, component_nodes=low_level_nodes, kernel=kernel, ladder=ladder, intervals=intervals
     )
     countersink_consumed = set(countersink_diagnostics.get("consumedNodeIds", []))
     after_countersink = [node for node in low_level_nodes if node.nodeId not in countersink_consumed]
     counterbore_nodes, claimed, counterbore_diagnostics = Counterbore.recognize_and_build(
-        model, evidence, claimed, component_nodes=after_countersink, kernel=kernel, ladder=ladder
+        model, evidence, claimed, component_nodes=after_countersink, kernel=kernel, ladder=ladder, intervals=intervals
     )
     counterbore_consumed = set(counterbore_diagnostics.get("consumedNodeIds", []))
     after_counterbore = [node for node in after_countersink if node.nodeId not in counterbore_consumed]
     step_bore_nodes, claimed, step_bore_diagnostics = StepBore.recognize_and_build(
-        model, evidence, claimed, component_nodes=after_counterbore, kernel=kernel, ladder=ladder
+        model, evidence, claimed, component_nodes=after_counterbore, kernel=kernel, ladder=ladder, intervals=intervals
     )
     step_bore_consumed = set(step_bore_diagnostics.get("consumedNodeIds", []))
     active_low_level = [node for node in after_counterbore if node.nodeId not in step_bore_consumed]

@@ -21,6 +21,13 @@ its keep, because that is where a bad install shows up first.
 If a check fails, recording over it is exactly the wrong move: the mismatch is
 the finding.
 
+The store this reads is the repository the script sits in - ``install/`` in a
+delivery, so one level up.  In the *development* repository the same file lives
+at ``release/install/``, where one level up is ``release/`` and there is no
+store; ``--root`` is how recording a fresh expectation is done from there:
+
+    python release/install/verify_install.py --record --root . --part <id>
+
 The NX line is optional throughout.  A part whose NX block says NOT_BUILT is
 reported as skipped with the reason, and the verdict still passes - that is the
 designed degradation, not a failure.
@@ -35,8 +42,11 @@ import sys
 from pathlib import Path
 
 # This file sits in install/, so the repository root - and the store under it -
-# is one level up.  The expectation stays next to the script that writes it.
-ROOT = Path(__file__).resolve().parents[1]
+# is one level up.  The expectation stays next to the script that writes it,
+# which is right in both repositories; only the store's root differs, and
+# ``--root`` says so explicitly rather than the script guessing from what it
+# finds on disk.
+DEFAULT_ROOT = Path(__file__).resolve().parents[1]
 EXPECTATION = Path(__file__).resolve().parent / "expected_install.json"
 
 
@@ -203,8 +213,12 @@ def main(argv=None) -> int:
                         help="with --record, record only this part (repeatable); a "
                              "release's expectation covers its shipped fixture, not the "
                              "whole development corpus")
+    parser.add_argument("--root", default=None, metavar="DIR",
+                        help="repository holding runs/<tag> (default: the directory "
+                             "above this script; pass '.' when running this from the "
+                             "development repository, where it lives one level deeper)")
     args = parser.parse_args(argv)
-    root = ROOT
+    root = Path(args.root).resolve() if args.root else DEFAULT_ROOT
     if args.record:
         return do_record(root, args.tag, args.part)
     if args.part:

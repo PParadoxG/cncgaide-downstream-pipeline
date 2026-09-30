@@ -50,7 +50,7 @@ def recognize_and_build(
 ) -> tuple[list[FeatureNode], set[str], dict[str, Any]]:
     """Build Step nodes from shared semantic resolutions."""
 
-    claimed = claimed_face_ids if claimed_face_ids is not None else set()
+    claimed = set(claimed_face_ids or ())
     if resolutions is None:
         if transition is None:
             transition = TransitionEvidence(model, evidence_document)

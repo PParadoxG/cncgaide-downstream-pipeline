@@ -85,7 +85,12 @@ class NxHeuristicRegistry(BaseHeuristicRegistry):
 
     @classmethod
     def ids_without_a_session(cls) -> list[str]:
-        """The 22 an evaluation can reach with no NX licence in the room."""
+        """The 23 an evaluation can reach with no NX licence in the room.
+
+        22 with node 20'a and one more with node 27 (finding D-08): H16 reads
+        SLOT_CLEARANCE, which node 21' had already moved off the kernel, and
+        its tier had stayed behind at E.
+        """
         return sorted(key for key in cls.active_ids()
                       if cls.tier(key) in TIERS_WITHOUT_A_SESSION)
 

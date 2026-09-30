@@ -1,5 +1,8 @@
 """Stage 1 main entry point — ``process_step_file(filepath) -> PartModel``.
 
+``process_step_shape`` is the same run returning the loaded shape as well, for
+the composition root that also needs kernel services over it.
+
 Orchestrates the full pipeline: load → metadata → PMI → traversal →
 geometry → adjacency → assembly → normalization → output.
 """
@@ -10,8 +13,9 @@ from pathlib import Path
 
 from OCC.Core.TopAbs import TopAbs_REVERSED
 from OCC.Core.BRepTools import breptools
+from OCC.Core.TopoDS import TopoDS_Shape
 
-from occline.parse.adjacency import build_adjacency_infos, detect_seam_edges
+from occline.parse.adjacency import ShapeTopology, build_adjacency_infos, detect_seam_edges
 from occline.parse.face_sampling import fill_face_samples
 from occline.parse.geometry import (
     extract_edge_geometry,
@@ -32,7 +36,8 @@ from contract.partmodel import (
     VertexData,
 )
 from contract.normalize import annotate_face_axial_extents, normalize_seam_faces
-from occline.parse.reader import detect_ap_version, extract_metadata, extract_pmi_annotations, load_step
+from occline.parse.reader import (detect_ap_version, extract_length_unit, extract_metadata,
+                                  extract_pmi_annotations, load_step)
 from occline.parse.traversal import (
     iter_edges,
     iter_faces,
@@ -50,6 +55,22 @@ def process_step_file(filepath: str) -> PartModel:
     This is the single public entry point.  All internal steps are
     orchestrated here in the canonical order.
     """
+    return process_step_shape(filepath)[0]
+
+
+def process_step_shape(filepath: str) -> tuple[PartModel, TopoDS_Shape]:
+    """The parsed ``PartModel`` *and* the shape it was parsed from.
+
+    Reading a STEP is the single most expensive operation on this line, and a
+    part used to pay for it twice: once here and once when the composition
+    root built the kernel services for the same file.  A caller that needs
+    both asks for both.
+
+    Sharing the shape also retires an assumption nobody had written down:
+    ``cadFaceIds`` is a position in the traversal order, so the two loads had
+    to enumerate faces identically for a kernel answer to line up with a
+    parsed face at all.  One shape cannot disagree with itself.
+    """
     fname = Path(filepath).name
     logger.info("Processing %s", fname)
 
@@ -64,6 +85,7 @@ def process_step_file(filepath: str) -> PartModel:
         ap_version=ap,
         part_name=meta_raw.get("part_name", ""),
         extraction_timestamp=datetime.now(timezone.utc).isoformat(),
+        length_unit=extract_length_unit(filepath),
     )
 
     # ---- c. PMI -------------------------------------------------------------
@@ -92,6 +114,15 @@ def process_step_file(filepath: str) -> PartModel:
     _e_counter = 0
     for topods_edge in iter_edges(shape):
         eh = hash(topods_edge)
+        # Finding B-01: ``iter_edges`` walks the shape face by face, so a
+        # shared edge arrives once per face that carries it, and the loop used
+        # to mint a fresh id and a fresh EdgeData every time - overwriting the
+        # map, so ``loop.edge_ids`` referenced only the last one and every
+        # earlier record became an orphan nothing could reach.  1854 of 3489
+        # records on this corpus.  The vertex loop above has always guarded
+        # this way; the edge loop now does too.
+        if eh in edge_hash_to_id:
+            continue
         eid = f"edge_{_e_counter}"
         _e_counter += 1
         edge_hash_to_id[eh] = eid
@@ -165,22 +196,27 @@ def process_step_file(filepath: str) -> PartModel:
                 sd.face_ids.append(fid)
                 faces[fid].is_outer = is_outer_shell
 
+        seen_edge_ids: set[str] = set()
         for e in iter_edges(shell):
             eh = hash(e)
             eid = edge_hash_to_id.get(eh)
-            if eid:
+            # Same walk, same repetition: a shell's shared edge arrived once
+            # per face and was appended each time (finding B-01).
+            if eid and eid not in seen_edge_ids:
+                seen_edge_ids.add(eid)
                 sd.edge_ids.append(eid)
-
-        for v in iter_vertices(shell) if hasattr(shell, '__iter__') else []:
-            pass  # vertices collected via edges above
 
         shells.append(sd)
 
     # ---- e. Geometry already extracted in step d ----------------------------
 
     # ---- f. Adjacency with concavity + seam detection -----------------------
-    adj_infos = build_adjacency_infos(shape)
-    seam_hashes = detect_seam_edges(shape)
+    # One incidence map, one hash lookup, one surface-parameter table for both
+    # passes: neither can change what the other sees, and the shape is not
+    # modified between them.
+    topology = ShapeTopology(shape)
+    adj_infos = build_adjacency_infos(shape, topology)
+    seam_hashes = detect_seam_edges(shape, topology)
 
     # Mark seam edges
     for sh in seam_hashes:
@@ -237,5 +273,5 @@ def process_step_file(filepath: str) -> PartModel:
         len(model.vertices),
         len(model.pmi_annotations),
     )
-    return model
+    return model, shape
 

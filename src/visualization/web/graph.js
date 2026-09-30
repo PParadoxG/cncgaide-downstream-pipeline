@@ -40,6 +40,14 @@ export function createGraph(container, store, callbacks) {
   function setModel(nextModel) {
     model = nextModel;
     lastSignature = '';
+    lastInputs = null;
+    // No part open: the tiles of the previous one are taken down here, because
+    // rebuild() returns early without a model and would leave them standing.
+    if (!model) {
+      lastStructure = '';
+      cy.elements().remove();
+      return;
+    }
     rebuild(store.get());
   }
 
@@ -54,9 +62,24 @@ export function createGraph(container, store, callbacks) {
 
   let lastSignature = '';
   let lastStructure = '';
+  let lastInputs = null;
 
   function rebuild(state) {
     if (!model) return;
+    // Only these four decide what the graph contains.  The signature below
+    // needs them *and* a pass over every node plus two joined id lists, and
+    // rebuild runs on every store update - hover included, which is every
+    // frame a pointer spends over the 3D view.  Comparing the four first
+    // costs a few dozen characters instead of the whole node set.
+    const inputs = [
+      state.layout,
+      state.search,
+      [...state.hiddenTypes].sort().join(','),
+      [...state.visibleEdgeTypes].sort().join(','),
+    ].join('|');
+    if (inputs === lastInputs) return;
+    lastInputs = inputs;
+
     const nodes = visibleNodes(state);
     const enabledEdgeTypes = [...state.visibleEdgeTypes].sort().join(',');
     // Two signatures, because these are not the same kind of change.  The
@@ -107,7 +130,6 @@ export function createGraph(container, store, callbacks) {
     // An edge is drawn when its type is switched on *and* both of its endpoints
      // survived the feature filter.  Types combine as a union.
     const edgeElements = [];
-    let edgeCount = 0;
     for (const edge of model.edges) {
       if (!state.visibleEdgeTypes.has(edge.edgeType)) continue;
       if (!nodeIds.has(edge.source) || !nodeIds.has(edge.target)) continue;
@@ -121,7 +143,6 @@ export function createGraph(container, store, callbacks) {
           weight: edge.sharedEdgeCount || 1,
         },
       });
-      edgeCount += 1;
     }
 
     cy.batch(() => {
@@ -139,7 +160,6 @@ export function createGraph(container, store, callbacks) {
 
     if (structureChanged) runLayout(state, nodes, typesPresent);
     applyState(store.get());
-    callbacks.onGraphStats({ shown: nodes.length, total: model.nodes.length, edges: edgeCount });
   }
 
   function runLayout(state, nodes, typesPresent) {

@@ -39,13 +39,14 @@ def recognize_and_build(
     planes and freeform surfaces and never cones.
     """
 
-    claimed = claimed_face_ids if claimed_face_ids is not None else set()
+    claimed = set(claimed_face_ids or ())
     transition = transition or build_transition_evidence(model, evidence_document or {})
     if extra_face_ids:
         transition = transition.with_extra_faces(extra_face_ids)
     nodes: list[FeatureNode] = []
     rejected: list[dict[str, Any]] = []
-    for region in transition_regions(model, transition, claimed):
+    regions = transition_regions(model, transition, claimed)
+    for region in regions:
         measurement = measure_transition(model, region.face_ids)
         if measurement.kind != "Chamfer":
             rejected.append({"faceIds": list(region.face_ids), "reason": measurement.reason or "not_a_planar_or_conical_chamfer", "surfaceTypes": list(region.surface_types)})
@@ -57,7 +58,13 @@ def recognize_and_build(
         "featureModule": "Chamfer",
         "method": "transition_evidence_connected_region_geometry_v1",
         "aagnetUsed": "transition_face_and_region_score_only",
-        "regionCandidateCount": len(transition_regions(model, transition, set())),
+        # Finding C-08: this used to be a second, unclaimed-blind walk of the
+        # whole part, so the same key meant "every transition region on the
+        # part" here and "the regions still unclaimed when I ran" in Fillet,
+        # and the two modules' candidate-to-accepted ratios were not
+        # comparable.  One meaning now: what this module saw.  Reusing the
+        # walk above also retires the duplicate region walk (CP-4).
+        "regionCandidateCount": len(regions),
         "acceptedCount": len(nodes),
         "claimedFaceCount": sum(len(node.partmodelFaceIds) for node in nodes),
         "rejectedRegions": rejected,

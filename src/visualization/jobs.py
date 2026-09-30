@@ -110,6 +110,8 @@ class JobRunner:
         self._last_finished: Job | None = None
         self._counter = 0
         self._thread: threading.Thread | None = None
+        self._process = None
+        self._stopping = False
 
     # -- public properties -------------------------------------------------
 
@@ -179,7 +181,7 @@ class JobRunner:
 
     def _start_next(self) -> None:
         with self._lock:
-            if self._current is not None or not self._queue:
+            if self._stopping or self._current is not None or not self._queue:
                 return
             job = self._queue.popleft()
             self._current = job
@@ -187,6 +189,11 @@ class JobRunner:
             job.startedAt = _now()
             env = dict(os.environ)
             env[JOB_ID_ENV] = job.jobId
+            # Both ends of the pipe are pinned to UTF-8.  Left to the locale
+            # (cp936 on this machine) a child that prints one character the
+            # code page cannot carry raises inside ``_drain``, and a build
+            # that succeeded is reported as failed (node 26 F-17).
+            env["PYTHONIOENCODING"] = "utf-8"
             try:
                 process = self._popen(
                     self.argv(job),
@@ -194,6 +201,8 @@ class JobRunner:
                     stdout=subprocess.PIPE,
                     stderr=subprocess.STDOUT,
                     text=True,
+                    encoding="utf-8",
+                    errors="replace",
                     bufsize=1,
                     env=env,
                 )
@@ -206,6 +215,7 @@ class JobRunner:
                 self._history.append(job)
                 self._last_finished = job
                 process = None
+            self._process = process
         if process is None:
             self._start_next()
             return
@@ -232,7 +242,51 @@ class JobRunner:
             self._history.append(job)
             self._last_finished = job
             self._current = None
+            self._process = None
         self._start_next()
+
+    def stop(self, timeout: float = 10.0) -> bool:
+        """Take no more jobs and end the one that is running.
+
+        A job outlives its runner otherwise: ``_drain`` is a daemon thread and
+        dies with the process, but the ``run_pipeline.py refresh`` subprocess
+        does not - it keeps writing into ``runs/<tag>/`` with nobody left to
+        report it, which is exactly what ``view --replace`` does to a server
+        that was mid-refresh (node 26 F-07).
+
+        Returns True when nothing of this runner's is still running.  Queued
+        jobs are dropped and marked, because the queue does not survive the
+        server that owns it.
+        """
+        with self._lock:
+            self._stopping = True
+            process = self._process
+            dropped = list(self._queue)
+            self._queue.clear()
+        for job in dropped:
+            job.state = "failed"
+            job.exitCode = -1
+            job.finishedAt = _now()
+            job.log.append("dropped: the server was stopped before this job started")
+            with self._lock:
+                self._history.append(job)
+                self._last_finished = job
+        if process is None:
+            return True
+        try:
+            if process.poll() is None:
+                process.terminate()
+            try:
+                process.wait(timeout=timeout)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait(timeout=timeout)
+        except Exception:  # noqa: BLE001 - already gone, or never really started
+            return process.poll() is not None
+        thread = self._thread
+        if thread is not None:
+            thread.join(timeout=timeout)
+        return process.poll() is not None
 
     def wait(self, timeout: float = 30.0) -> bool:
         """Block until the queue drains (tests and shutdown); False on timeout."""

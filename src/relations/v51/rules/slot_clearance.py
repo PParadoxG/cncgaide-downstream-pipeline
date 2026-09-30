@@ -133,17 +133,21 @@ class SlotClearance(RelationRule):
                             "clearanceWitnessCount": 1,
                             "courseDirectionA": left_course,
                             "courseDirectionB": right_course,
+                            "courseWitness": {
+                                "courseAngle": (
+                                    round(course_angle, 6) if course_angle is not None else None
+                                ),
+                                "courseParallel": (
+                                    None if course_angle is None
+                                    else bool(course_angle <= PARALLEL_ANGLE_TOL_DEG)
+                                ),
+                                "transverseAngle": (
+                                    round(transverse_angle, 6) if transverse_angle is not None else None
+                                ),
+                            },
                         },
                         properties={
                             "slotClearance": round(best[0], 6),
-                            "courseAngle": round(course_angle, 6) if course_angle is not None else None,
-                            "courseParallel": (
-                                None if course_angle is None
-                                else bool(course_angle <= PARALLEL_ANGLE_TOL_DEG)
-                            ),
-                            "transverseAngle": (
-                                round(transverse_angle, 6) if transverse_angle is not None else None
-                            ),
                         },
                     )
                 )

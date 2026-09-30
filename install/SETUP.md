@@ -14,7 +14,9 @@ Prerequisites: Windows 10 or 11, conda (`conda --version` must answer), about
 conda env create -f install/environment.yml
 ```
 
-Several minutes, roughly 300 MB downloaded.
+Several minutes, roughly 300 MB downloaded. It needs `git` on `PATH` and
+network access: one of the dependencies, `occwl`, is not on any package index
+and is installed straight from its upstream repository at a pinned commit.
 
 Then find the environment's interpreter once and use it by full path from here
 on — that removes the commonest deployment mistake, which is running from a
@@ -42,6 +44,14 @@ is correct — CPU is the supported configuration and gives the same results.
 
 Keep `PYTHONNOUSERSITE=1` set for the rest of this file; it stops an old
 `pip install --user` package from shadowing the environment.
+
+```
+set PYTHONNOUSERSITE=1 && "PY" -c "import occwl; print(occwl.__file__)"
+```
+
+Expect a path inside the environment's `site-packages`. This repository does
+not carry a copy of occwl, so a path inside the checkout would mean some other
+copy is shadowing the installed one — remove it rather than working around it.
 
 ```
 "PY" -m compileall -q src run_pipeline.py
@@ -149,7 +159,7 @@ conda install -n CNCgAIde "pythonocc-core=7.9.3=novtk*" -c conda-forge --overrid
 ```
 
 ```
-set PYTHONNOUSERSITE=1 && "PY" -m pip install torch==2.0.1 dgl==1.1.0 numpy==1.26.4 scipy==1.13.1 timm==1.0.27 networkx==3.4.2 tqdm==4.68.3 PyYAML==6.0.3
+set PYTHONNOUSERSITE=1 && "PY" -m pip install torch==2.0.1 dgl==1.1.0 numpy==1.26.4 scipy==1.13.1 timm==1.0.27 networkx==3.4.2 tqdm==4.68.3 PyYAML==6.0.3 "git+https://github.com/AutodeskAILab/occwl@8b536ea8b3cf977dbafc1cf0a89eaa28fa996bba#egg=occwl"
 ```
 
 **`import OCC` fails or crashes the interpreter.** Almost always a mixed-channel
@@ -158,6 +168,11 @@ rather than repairing in place.
 
 **`import dgl` fails, or inference crashes.** Check the version is exactly
 1.1.0 (`"PY" -m pip show dgl`).
+
+**`occwl is not installed` when a part is processed.** The pip step could not
+reach the upstream repository, usually because `git` is not on `PATH` or the
+network was unavailable. Install it on its own with the last command in the
+block above, then redo the step 2 check that prints `occwl.__file__`.
 
 **`import numpy` fails inside torch.** numpy 2.x; reinstall `numpy==1.26.4`.
 

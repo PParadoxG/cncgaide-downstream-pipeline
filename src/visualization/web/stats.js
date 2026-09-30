@@ -21,7 +21,13 @@ const CLASS = { PASS: 'pass', FAIL: 'fail', NOT_EVALUABLE: 'neval', NOT_APPLICAB
 // words on screen state whether the guideline holds, not whether the design
 // is wrong.
 const SHORT = { PASS: 'met', FAIL: 'not met', NOT_EVALUABLE: 'n/e', NOT_APPLICABLE: 'n/a' };
-export function createStats(root, index) {
+export function createStats(root, initialIndex) {
+  // The index is replaced by `setIndex`, not by a second instance: a sync
+  // finishing used to build a whole new view over the same mount, and the old
+  // one - holding the whole previous index and still subscribed to the
+  // external-gap preference - stayed alive, redrawing the same root once more
+  // for every sync that had ever happened.
+  let index = initialIndex;
   // One dialect's numbers at a time.  A pass rate under v5.1 and one under
   // nx_v1 are not one metric (node 19a), so the two folds live side by side
   // in the index and the view reads the shown line's - never their sum, and
@@ -54,10 +60,12 @@ export function createStats(root, index) {
   /** One part's summary for the shown line; parts that line never built drop
    * out of the matrix rather than showing as empty rows. */
   function summaryOf(part) {
+    // Only the shown line's own block.  There used to be a fall-back to a
+    // copy at the entry's top level, and it had to name the line 'occ' to
+    // know the copy was that line's - a branch on a line name, which display
+    // code may not have.  The producer no longer writes the copy (P-G6).
     const info = (part.lines && part.lines[currentLine()]) || null;
-    if (info && info.heuristicSummary) return info.heuristicSummary;
-    if (info && info.status && info.status !== 'PASS') return null;
-    return currentLine() === 'occ' ? (part.heuristicSummary || null) : null;
+    return (info && info.heuristicSummary) || null;
   }
 
   function readLine() {
@@ -141,6 +149,15 @@ export function createStats(root, index) {
     root.append(cards(), matrixPanel(), rulePanel());
   }
 
+  // Point the same view at a freshly loaded index.  Like construction, this
+  // does not draw: the caller knows whether the view is the one on screen.
+  function setIndex(nextIndex) {
+    index = nextIndex;
+    readLine();
+  }
+
+  // One subscription for the life of the page: the view is never replaced, so
+  // there is never a second one to take off again.
   onExternalGapsChange(() => {
     if (!root.hidden) render();
   });
@@ -564,7 +581,11 @@ thresholds ${registry.thresholdsYamlSha256 || '?'}`;
   async function fillReasons(container, partId, hId) {
     let payload = state.records.get(partId);
     if (!payload) {
-      payload = await loadHeuristics(`data/${encodeURIComponent(partId)}/${lineFolder()}/`);
+      // The shown line, named: the reasons under a row must come from the
+      // same line as the counts on it.  The two dialects publish different
+      // heuristic sets and different node ids, so borrowing one line's file
+      // for the other's row prints v5.1 ids under an nx_v1 count.
+      payload = await loadHeuristics(`data/${encodeURIComponent(partId)}/${lineFolder(currentLine())}/`);
       state.records.set(partId, payload || { records: [] });
     }
     const rows = (payload.records || [])
@@ -621,5 +642,5 @@ thresholds ${registry.thresholdsYamlSha256 || '?'}`;
     return label.replace(/^H\d+\s*[—–-]\s*/, '');
   }
 
-  return { render };
+  return { render, setIndex };
 }

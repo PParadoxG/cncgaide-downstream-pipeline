@@ -10,8 +10,7 @@ just constructed sits in the material.
 from __future__ import annotations
 
 from OCC.Core.BRepClass3d import BRepClass3d_SolidClassifier
-from OCC.Core.TopAbs import TopAbs_IN, TopAbs_ON, TopAbs_OUT, TopAbs_SOLID
-from OCC.Core.TopExp import TopExp_Explorer
+from OCC.Core.TopAbs import TopAbs_IN, TopAbs_ON, TopAbs_OUT
 from OCC.Core.gp import gp_Pnt
 
 from contract.kernel import (
@@ -21,19 +20,30 @@ from contract.kernel import (
     POINT_UNAVAILABLE,
     POINT_UNKNOWN,
 )
+from occline.parse.traversal import iter_solids
 
 
 class SolidClassifier:
-    """``inside / outside / on`` against the loaded solid, or unavailable."""
+    """``inside / outside / on`` against the loaded solid, or unavailable.
+
+    One classifier can only speak for one solid.  Building it from the first
+    solid of a multi-body shape answers ``out`` for every point inside the
+    others - a wrong answer wearing the face of a right one, which is the one
+    thing this seam forbids.  So a shape with more than one solid makes the
+    service *unavailable* and the caller records a named gap.  Multi-body STEP
+    is refused a layer earlier anyway
+    (:class:`occline.parse.reader.MultiBodyStepUnsupported`); this is the same
+    ruling stated where the wrong answer would have been produced.
+    """
 
     def __init__(self, shape) -> None:
         self._classifier = None
         if shape is None:
             return
-        target = shape
-        explorer = TopExp_Explorer(shape, TopAbs_SOLID)
-        if explorer.More():
-            target = explorer.Current()
+        solids = list(iter_solids(shape))
+        if len(solids) > 1:
+            return
+        target = solids[0] if solids else shape
         try:
             self._classifier = BRepClass3d_SolidClassifier(target)
         except Exception:

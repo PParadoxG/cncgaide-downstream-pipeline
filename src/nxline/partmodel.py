@@ -29,6 +29,7 @@ not hidden behind an adapter.
 from __future__ import annotations
 
 import math
+import re
 from datetime import datetime, timezone
 
 from contract.normalize import annotate_face_axial_extents, normalize_seam_faces
@@ -63,6 +64,17 @@ NX_SURFACE_TYPES = {
 UV_FRACTIONS = (0.2, 0.4, 0.5, 0.6, 0.8)
 NUM_CURVE_SAMPLES = 9
 SMOOTH_TOLERANCE_DEG = 0.1
+
+
+def _ordinal(identifier: str) -> int:
+    """The number in a ``<kind>_<n>`` id, for sorting by it.
+
+    Finding E-17: this module numbers faces, edges and vertices and then sorts
+    them - and a bare ``sorted()`` puts ``edge_10`` before ``edge_2``.  Every
+    other place in the line already sorts by the number; the two that did not
+    now read this.
+    """
+    return int(identifier.rsplit("_", 1)[-1])
 
 
 def _unit(vector):
@@ -178,8 +190,21 @@ def _interior_samples(uf, face_tag: int, norm_dir: int) -> list[dict]:
     return samples
 
 
-def _facet_area_centroids(uf, body_tag: int, face_tags: list[int]) -> dict[int, tuple[float, list[float]]]:
-    """Per face: (facet area, area centroid) from one default-tolerance facet model."""
+def _facet_area_centroids(uf, body_tag: int, face_tags: list[int],
+                          notes: list[str] | None = None) -> dict[int, tuple[float, list[float]]]:
+    """Per face: (facet area, area centroid) from one default-tolerance facet model.
+
+    The reader below takes the first three vertices of each facet, which is
+    the whole facet only while NX returns triangles.  ``AskVerticesOfFacet``
+    is documented to return four for a quadrangle, and there is no parameter
+    that forbids one, so a quadrangle would silently cost this face half of
+    every such facet's area and pull its centroid (finding E-08).  Measured on
+    this install - NX 2506.4021, ``AskMaxFacetVerts`` = 3 over the
+    084_818_012_solid_001 body, 654 facets across 55 faces, every one a
+    triangle - so the guard below has never fired; it is here so that the day
+    it does, the face says so instead of quietly measuring short.  *notes*
+    collects those statements for the model's normalization log.
+    """
     result: dict[int, tuple[float, list[float]]] = {}
     try:
         parameters = uf.Facet.AskDefaultParameters()
@@ -193,6 +218,8 @@ def _facet_area_centroids(uf, body_tag: int, face_tags: list[int]) -> dict[int, 
             continue
         total = 0.0
         moment = [0.0, 0.0, 0.0]
+        oversized = 0
+        widest = 0
         facet_id = -1
         while True:
             try:
@@ -207,6 +234,12 @@ def _facet_area_centroids(uf, body_tag: int, face_tags: list[int]) -> dict[int, 
                 continue
             if count < 3:
                 continue
+            if count > 3:
+                # Not measured, not guessed: taking the first three would
+                # report a fraction of this facet as the whole of it.
+                oversized += 1
+                widest = max(widest, int(count))
+                continue
             a, b, c = vertices[0], vertices[1], vertices[2]
             ab = [b[i] - a[i] for i in range(3)]
             ac = [c[i] - a[i] for i in range(3)]
@@ -218,6 +251,12 @@ def _facet_area_centroids(uf, body_tag: int, face_tags: list[int]) -> dict[int, 
             total += area
             for i in range(3):
                 moment[i] += area * centre[i]
+        if oversized and notes is not None:
+            notes.append(
+                "FACET GAP face tag %d: %d facet(s) carry more than three vertices "
+                "(widest %d); this reader measures triangles only, so their area and "
+                "moment are left out rather than counted short" % (tag, oversized, widest)
+            )
         if total > 0.0:
             result[tag] = (total, [moment[i] / total for i in range(3)])
     return result
@@ -451,7 +490,65 @@ def _classify_concavity(uf, body_tag: int, edge, edge_data: EdgeData,
 
 # ------------------------------------------------------------------ builder
 
-def build_partmodel(uf, work, body, *, source_file: str, part_name: str) -> tuple[PartModel, list]:
+def part_length_unit(work, units_enum=None) -> str:
+    """NX's own name for the part's units - ``MILLIMETERS``, ``INCHES``, ``""``.
+
+    ``BasePart.PartUnits`` is an enumeration member, and what the binding hands
+    back is a property of the binding rather than of the part.  On NX 2506 it
+    is an opaque ``BasePartUnitsMemberType`` whose ``str()`` is ``'1'`` and
+    which carries no ``name`` (probed:
+    ``NODE_REPORT/Node28_scripts/d/nx_probe_part_units.py``).  So the name is
+    asked of **NX's own enumeration**: *units_enum* is ``NXOpen.BasePart.Units``,
+    and the member that ``is`` this one names it.  Nothing is inferred from the
+    ordinal - an integer whose meaning is a version of NXOpen is not a unit -
+    so an unnamed member, a missing enumeration or a session that refuses all
+    give ``""``.
+
+    The enumeration is a parameter because this module never imports NXOpen:
+    every NX handle is passed in, which is what keeps it importable and
+    testable outside a session.
+
+    NX's word, not the STEP file's - the two lines record the unit each of them
+    was told, in the vocabulary each of them speaks, and neither is translated
+    into the other's.  Nothing computes with it either way.
+    """
+    try:
+        units = work.PartUnits
+    except Exception:
+        return ""
+    if units is None:
+        return ""
+    text = (getattr(units, "name", None)
+            or _enum_member_name(units, units_enum)
+            or str(units))
+    words = re.findall(r"[A-Za-z]+", str(text))
+    if not words or words[-1].lower() == "units":
+        return ""
+    return words[-1].upper()
+
+
+def _enum_member_name(member, units_enum) -> str:
+    """Which attribute of *units_enum* is *member*, by identity then equality."""
+    if units_enum is None:
+        return ""
+    names = [name for name in dir(units_enum) if not name.startswith("_")]
+    for name in names:
+        try:
+            if getattr(units_enum, name) is member:
+                return name
+        except Exception:
+            continue
+    for name in names:
+        try:
+            if getattr(units_enum, name) == member:
+                return name
+        except Exception:
+            continue
+    return ""
+
+
+def build_partmodel(uf, work, body, *, source_file: str, part_name: str,
+                    part_units_enum=None) -> tuple[PartModel, list]:
     """One NX body -> a filled ``PartModel`` plus its face list in id order.
 
     The returned face list is the id currency: index ``i`` is cad face id
@@ -478,7 +575,8 @@ def build_partmodel(uf, work, body, *, source_file: str, part_name: str) -> tupl
     except Exception:
         unit_mm = unit_mm2 = measure = None
 
-    facet_moments = _facet_area_centroids(uf, body.Tag, [fc.Tag for fc in face_objects])
+    facet_moments = _facet_area_centroids(uf, body.Tag, [fc.Tag for fc in face_objects],
+                                          identity_notes)
 
     gathered_faces: list[dict] = []
     for fc in face_objects:
@@ -601,7 +699,9 @@ def build_partmodel(uf, work, body, *, source_file: str, part_name: str) -> tupl
         fc = entry["object"]
         face_id = f"face_{index}"
         face_id_by_tag[fc.Tag] = face_id
-        face_edge_ids = sorted({edge_id_by_tag[e.Tag] for e in fc.GetEdges() if e.Tag in edge_id_by_tag})
+        face_edge_ids = sorted(
+            {edge_id_by_tag[e.Tag] for e in fc.GetEdges() if e.Tag in edge_id_by_tag},
+            key=_ordinal)
         face_loops = _reconstruct_loops(index, face_edge_ids, edges)
         for loop in face_loops:
             loops[loop.id] = loop
@@ -633,7 +733,7 @@ def build_partmodel(uf, work, body, *, source_file: str, part_name: str) -> tupl
         if len(attached) != 2:
             continue
         # Which of the two NX names first is not a property of the edge.
-        attached.sort(key=lambda fc: int(face_id_by_tag[fc.Tag].rsplit("_", 1)[-1]))
+        attached.sort(key=lambda fc: _ordinal(face_id_by_tag[fc.Tag]))
         fa, fb = attached
         id_a, id_b = face_id_by_tag[fa.Tag], face_id_by_tag[fb.Tag]
         norm_a = int(face_data_raw[fa.Tag][6])
@@ -645,9 +745,9 @@ def build_partmodel(uf, work, body, *, source_file: str, part_name: str) -> tupl
         faces[id_a].adjacencies.append(AdjacencyInfo(adjacent_face_id=id_b, shared_edge_id=shared, connection_type=concavity))
         faces[id_b].adjacencies.append(AdjacencyInfo(adjacent_face_id=id_a, shared_edge_id=shared, connection_type=concavity))
 
-    shell = ShellData(id="shell_0", face_ids=sorted(faces, key=lambda f: int(f.rsplit("_", 1)[-1])),
-                      edge_ids=sorted(edges, key=lambda e: int(e.rsplit("_", 1)[-1])),
-                      vertex_ids=sorted(vertices, key=lambda v: int(v.rsplit("_", 1)[-1])))
+    shell = ShellData(id="shell_0", face_ids=sorted(faces, key=_ordinal),
+                      edge_ids=sorted(edges, key=_ordinal),
+                      vertex_ids=sorted(vertices, key=_ordinal))
 
     model = PartModel(
         metadata=PartMetadata(
@@ -656,6 +756,7 @@ def build_partmodel(uf, work, body, *, source_file: str, part_name: str) -> tupl
             part_name=part_name,
             extraction_timestamp=datetime.now(timezone.utc).isoformat(),
             geometry_provider="nxline",
+            length_unit=part_length_unit(work, part_units_enum),
         ),
         shells=[shell],
         faces=faces,

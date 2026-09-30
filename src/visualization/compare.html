@@ -7,6 +7,8 @@
 <link rel="stylesheet" href="web/style.css">
 <script>
   document.documentElement.dataset.theme = localStorage.getItem('tempVisualTheme') || 'light';
+  // Provider before first paint too, so the accent never flashes the other line's colour.
+  document.documentElement.dataset.line = localStorage.getItem('gatherSeedLine') === 'nx' ? 'nx' : 'occ';
 </script>
 <script type="importmap">
 { "imports": { "three": "./vendor/three.module.js" } }
@@ -39,6 +41,8 @@
     <button id="theme-toggle" class="icon-btn" title="Light / dark"></button>
   </div>
 </header>
+
+<div class="banner" id="run-banner" hidden></div>
 
 <div class="cmp-score" id="score"></div>
 
